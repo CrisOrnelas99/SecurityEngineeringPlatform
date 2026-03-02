@@ -12,3 +12,5 @@ gitdata/
 .abc/
 .idea/
 .vscode/
+webapp/*.tmp
+webapp/tmp_cookie.txt
