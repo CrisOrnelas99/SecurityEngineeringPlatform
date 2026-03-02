@@ -1,0 +1,44 @@
+[
+  {
+    "id": "admin-1",
+    "username": "admin",
+    "role": "admin",
+    "passwordHash": "",
+    "createdAt": "2026-03-02T00:00:00.000Z"
+  },
+  {
+    "id": "67dfaf8c-4b09-4640-bd0b-c45a6b8b3bae",
+    "username": "newUser3",
+    "role": "analyst",
+    "passwordHash": "scrypt$36edcba11741e2ecab41ba4a2e6c6156$c3f29c79c1026436dc53a42db488146779412b950107f201c7938c8b823d512670c3d626026dc3f9aa59c1e5c3f786220c58a0b4f5905cb243e17b73d573f128",
+    "createdAt": "2026-03-02T20:54:36.359Z"
+  },
+  {
+    "id": "f62c60d7-4740-4faf-8816-8faa4d8c7581",
+    "username": "goose",
+    "role": "analyst",
+    "passwordHash": "scrypt$da0c6e329761e1a319f9b3f64b76c2a7$0829456f4242ea3300c792be82c0c4c435d59c9ad738d1cf0d033ded879342c8c70d25dffcce7bc42c22e54797002acbe80dff3edd274fe29b7021d661846ca3",
+    "createdAt": "2026-03-02T20:55:38.632Z"
+  },
+  {
+    "id": "8e13e89c-40c8-45fe-8e24-c6c8a8a0de64",
+    "username": "analyst1",
+    "role": "analyst",
+    "passwordHash": "scrypt$664d7ef03fe3edc24da93d0d9e406d90$bb40ad1dca9fef7fd271ea62ec066c2f81b81db5290b00378a64dd055c12dbd90c0b2a86304878abe552b985c6443002e7f285445303028e2258169738cbc466",
+    "createdAt": "2026-03-02T23:02:49.727Z"
+  },
+  {
+    "id": "6dfbf7b5-35b5-4112-a5d8-02e494d502d0",
+    "username": "admin1",
+    "role": "analyst",
+    "passwordHash": "scrypt$ac51dcff2c47eae18bfa5e2e209a68e0$550b565ba2648be35596a02fc24eca5cbc0ad3dd8edf9364743d9408034da66ec2f086d3b38ac72516c2241bdc3beb297380036943b0ababca0934a373657bf9",
+    "createdAt": "2026-03-02T23:11:43.636Z"
+  },
+  {
+    "id": "f740914a-717a-4bcf-8c93-8597c54534f6",
+    "username": "admin123",
+    "role": "analyst",
+    "passwordHash": "scrypt$7ff1925699abd5f54f4b24dfcfbddf92$de031b7b029d172455f9372b785f45f0fa75540bb9d32ccde006bbec6efb180b6ae12849c2e1c2536a98992759ead650d08707d76b33675241d8c35e41184aef",
+    "createdAt": "2026-03-02T23:22:33.612Z"
+  }
+]

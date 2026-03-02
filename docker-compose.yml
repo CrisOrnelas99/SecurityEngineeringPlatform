@@ -1,0 +1,75 @@
+version: "3.9"
+
+services:
+  security-core:
+    build:
+      context: ./security_core
+      dockerfile: Dockerfile
+    image: security-core:latest
+    command: ["/bin/sh", "-c", "sleep infinity"]
+
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+    image: security-webapp:latest
+    depends_on:
+      - security-core
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - LOG_FILE=/app/logs/app.log
+      - SECURITY_CORE_BIN=/app/security_core/build/security_core
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-change-this-access-secret}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-change-this-refresh-secret}
+      - JWT_ACCESS_TTL=${JWT_ACCESS_TTL:-900}
+      - JWT_REFRESH_TTL=${JWT_REFRESH_TTL:-604800}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
+      - CSRF_COOKIE_SECRET=${CSRF_COOKIE_SECRET:-change-csrf-secret}
+      - UPLOAD_DIR=/app/uploads
+      - BLOCKLIST_PATH=/app/data/blocklist.json
+      - LOCKED_USERS_PATH=/app/data/locked_users.json
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./webapp/logs:/app/logs
+      - ./webapp/data:/app/data
+      - ./webapp/uploads:/app/uploads
+      - ./security_core:/app/security_core:ro
+
+  python-engine:
+    build:
+      context: ./python_engine
+      dockerfile: Dockerfile
+    image: security-python-engine:latest
+    depends_on:
+      - webapp
+    environment:
+      - SOC_PORT=8000
+      - WEB_LOG_PATH=/data/app.log
+      - BLOCKLIST_PATH=/shared/blocklist.json
+      - LOCKED_USERS_PATH=/shared/locked_users.json
+      - ALERTS_PATH=/data/alerts.json
+      - TIMELINE_PATH=/data/timeline.json
+      - SECURITY_CORE_BIN=/opt/security_core/build/security_core
+      - SOC_LOAD_PERSISTED_STATE=false
+      - SOC_REPLAY_LOG_ON_START=false
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./webapp/logs:/data
+      - ./webapp/data:/shared
+      - ./python_engine/data:/app/data
+      - ./security_core:/opt/security_core:ro
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    image: security-dashboard:latest
+    depends_on:
+      - python-engine
+    environment:
+      - VITE_SOC_API_URL=http://localhost:8000
+    ports:
+      - "5173:5173"

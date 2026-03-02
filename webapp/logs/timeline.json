@@ -1,0 +1,26 @@
+[
+  {
+    "timestamp": "2026-03-02T23:31:41.895225+00:00",
+    "event": "BLACKLISTED_IP_ACCESS",
+    "ip": "::ffff:172.18.0.1",
+    "userId": "anonymous",
+    "scoreImpact": 100,
+    "cumulativeRisk": 100,
+    "actionsTaken": [],
+    "details": {
+      "ip": "::ffff:172.18.0.1",
+      "method": "GET",
+      "endpoint": "/api/csrf-token",
+      "errorType": "BlockedIp"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T23:31:55.913972+00:00",
+    "event": "MANUAL_UNBLOCK_IP",
+    "ip": "::ffff:172.18.0.1",
+    "userId": "system",
+    "scoreImpact": 0,
+    "cumulativeRisk": 100,
+    "source": "dashboard"
+  }
+]

@@ -1,0 +1,21 @@
+[
+  {
+    "id": "ec2d9752d6c52f87",
+    "timestamp": "2026-03-02T23:31:41.895225+00:00",
+    "type": "BLACKLISTED_IP_ACCESS",
+    "ip": "::ffff:172.18.0.1",
+    "userId": "anonymous",
+    "score": 100,
+    "riskLevel": "HIGH",
+    "endpoint": "/api/csrf-token",
+    "method": "GET",
+    "errorType": "BlockedIp",
+    "details": {
+      "ip": "::ffff:172.18.0.1",
+      "method": "GET",
+      "endpoint": "/api/csrf-token",
+      "errorType": "BlockedIp"
+    },
+    "actionsTaken": []
+  }
+]

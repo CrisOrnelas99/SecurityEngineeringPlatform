@@ -1,0 +1,14 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+webapp/node_modules/
+dashboard/node_modules/
+python_engine/.venv/
+webapp/logs/*.log
+python_engine/data/*.json
+security_core/build/
+gitdata/
+.abc/
+.idea/
+.vscode/
