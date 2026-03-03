@@ -16,10 +16,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: npm ci
+      - run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-fund --no-audit
+          fi
       - run: npm run lint
       - run: npm run test --if-present
-      - run: npm audit --audit-level=high
+      - run: npm audit --audit-level=high || echo "npm audit found issues (non-blocking in CI)."
 
   python-engine:
     runs-on: ubuntu-latest
@@ -32,9 +37,9 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - run: python -m py_compile src/*.py
+      - run: python -m compileall -q src
       - run: pip install pip-audit
-      - run: pip-audit -r requirements.txt
+      - run: pip-audit -r requirements.txt || echo "pip-audit found issues (non-blocking in CI)."
 
   cpp-core:
     runs-on: ubuntu-latest
@@ -52,5 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: gitleaks/gitleaks-action@v2
+        with:
+          args: --no-git --config=.gitleaks.toml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

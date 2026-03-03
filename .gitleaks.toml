@@ -1,0 +1,10 @@
+[allowlist]
+description = "Allow template/example placeholders used for local configuration."
+paths = [
+  '''(^|/)\.env\.example$'''
+]
+regexes = [
+  '''change-[a-z-]*secret''',
+  '''VITE_SOC_API_URL=http://localhost:8000''',
+  '''CORS_ORIGIN=http://localhost:5173'''
+]
