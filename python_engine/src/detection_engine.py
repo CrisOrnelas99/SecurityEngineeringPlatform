@@ -9,8 +9,7 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-
-from .crypto_core_client import CryptoCoreClient
+from urllib.parse import unquote_plus
 
 logger = logging.getLogger("soc.engine")
 
@@ -24,6 +23,7 @@ class DetectionEngine:
         self.timeline_path = Path(os.getenv("TIMELINE_PATH", "/data/timeline.json"))
         self.load_persisted_state = self._env_bool("SOC_LOAD_PERSISTED_STATE", False)
         self.replay_log_on_start = self._env_bool("SOC_REPLAY_LOG_ON_START", False)
+        self.auto_block_private_ips = self._env_bool("SOC_AUTO_BLOCK_PRIVATE_IPS", False)
 
         self._risk_by_ip: dict[str, int] = defaultdict(int)
         self._risk_by_user: dict[str, int] = defaultdict(int)
@@ -33,29 +33,24 @@ class DetectionEngine:
         self._locked_users: set[str] = set()
 
         self._failed_logins: dict[str, deque[float]] = defaultdict(deque)
+        self._last_failed_login_burst_alert_at: dict[str, float] = defaultdict(float)
         self._failed_login_usernames: dict[str, deque[tuple[float, str]]] = defaultdict(deque)
         self._last_account_enum_alert_at: dict[str, float] = defaultdict(float)
         self._request_times: dict[str, deque[float]] = defaultdict(deque)
-        self._user_token_ips: dict[str, set[str]] = defaultdict(set)
-        self._baseline_logins: dict[str, deque[float]] = defaultdict(deque)
-        self._token_fingerprint_ips: dict[str, set[str]] = defaultdict(set)
         self._recent_honeypot_events: dict[tuple[str, str, str], float] = {}
+        self._recent_signature_alerts: dict[tuple[str, str, str, str], float] = {}
 
         self._file_position = 0
         self._lock = threading.Lock()
-        self._crypto = CryptoCoreClient()
 
         self.weights = {
             "FAILED_LOGIN_BURST": 35,
             "ACCOUNT_ENUMERATION": 30,
-            "SUSPICIOUS_JWT_REUSE": 30,
             "PRIV_ESC_ATTEMPT": 25,
-            "INJECTION_ATTEMPT": 40,
             "PATH_TRAVERSAL_ATTEMPT": 45,
             "EXCESSIVE_API_CALLS": 20,
             "HONEYPOT_TRIGGER": 90,
             "ABNORMAL_REQUEST_FREQUENCY": 30,
-            "BLACKLISTED_IP_ACCESS": 100,
         }
 
     @staticmethod
@@ -130,6 +125,31 @@ class DetectionEngine:
             return "MEDIUM"
         return "LOW"
 
+    @staticmethod
+    def _normalize_ip(ip: str) -> str:
+        value = str(ip or "")
+        return value[7:] if value.startswith("::ffff:") else value
+
+    def _is_private_or_local_ip(self, ip: str) -> bool:
+        normalized = self._normalize_ip(ip)
+        try:
+            parsed = ipaddress.ip_address(normalized)
+        except ValueError:
+            return False
+        return parsed.is_private or parsed.is_loopback or parsed.is_link_local
+
+    @staticmethod
+    def _decode_for_signatures(value: str) -> str:
+        # Decode URL-encoded attack payloads so signature matching catches
+        # both raw and encoded forms (e.g., "union select" vs "union%20select").
+        text = str(value or "")
+        for _ in range(2):
+            decoded = unquote_plus(text)
+            if decoded == text:
+                break
+            text = decoded
+        return text.lower()
+
     def _record_incident(self, event_type: str, event: dict[str, Any], score: int, details: dict[str, Any]) -> None:
         ip = event.get("ip", "unknown")
         user_id = event.get("userId") or "anonymous"
@@ -198,9 +218,13 @@ class DetectionEngine:
 
         # Auto-block source IP for every detected incident event.
         if ip and ip != "unknown":
-            if ip not in self._blocked_ips:
-                actions.append("BLACKLISTED_IP_ACCESS")
-            self._blocked_ips.add(ip)
+            should_block = True
+            if not self.auto_block_private_ips and self._is_private_or_local_ip(ip):
+                should_block = False
+            if should_block:
+                if ip not in self._blocked_ips:
+                    actions.append("BLACKLISTED_IP_ACCESS")
+                self._blocked_ips.add(ip)
 
         if self._risk_by_user[user_id] >= 90 and user_id != "anonymous":
             if user_id not in self._locked_users:
@@ -228,10 +252,20 @@ class DetectionEngine:
         # A small window avoids a duplicate BLACKLISTED_IP_ACCESS for that one hit.
         return (now - seen_at) <= 2.0
 
+    def _is_duplicate_signature_alert(self, alert_type: str, ip: str, method: str, endpoint: str, now: float) -> bool:
+        key = (alert_type, ip, method, endpoint)
+        seen_at = self._recent_signature_alerts.get(key)
+        if seen_at is not None and (now - seen_at) <= 2.0:
+            return True
+        self._recent_signature_alerts[key] = now
+        return False
+
     def _detect(self, event: dict[str, Any]) -> None:
         ip = event.get("ip", "unknown")
         user_id = event.get("userId") or "anonymous"
-        endpoint = (event.get("endpoint") or "").lower()
+        endpoint_raw = event.get("endpoint") or ""
+        endpoint = str(endpoint_raw).lower()
+        decoded_endpoint = self._decode_for_signatures(str(endpoint_raw))
         method = (event.get("method") or "").upper()
         error_type = (event.get("errorType") or "").lower()
         metadata = event.get("metadata") or {}
@@ -241,36 +275,22 @@ class DetectionEngine:
         stale_keys = [key for key, ts in self._recent_honeypot_events.items() if (now - ts) > 10.0]
         for key in stale_keys:
             self._recent_honeypot_events.pop(key, None)
+        stale_signature_keys = [key for key, ts in self._recent_signature_alerts.items() if (now - ts) > 10.0]
+        for key in stale_signature_keys:
+            self._recent_signature_alerts.pop(key, None)
 
         if event.get("event") == "HONEYPOT_TRIGGER":
             self._mark_honeypot_event(ip, endpoint, method, now)
-
-        # Avoid double-alerting on the same honeypot request:
-        # `HONEYPOT_TRIGGER` and its immediate `REQUEST_AUDIT` should count once.
-        if ip in self._blocked_ips and event.get("event") != "HONEYPOT_TRIGGER" and not self._is_honeypot_followup_audit(event, now):
-            self._record_incident(
-                "BLACKLISTED_IP_ACCESS",
-                event,
-                self.weights["BLACKLISTED_IP_ACCESS"],
-                {
-                    "ip": ip,
-                    "method": event.get("method"),
-                    "endpoint": event.get("endpoint"),
-                    "errorType": event.get("errorType"),
-                },
-            )
-            # If request was already denied by blocklist controls, do not run
-            # additional detectors on the same denied traffic.
-            if event.get("event") == "BLOCKLIST_DENY" or error_type == "blockedip":
-                return
 
         if event.get("event") == "LOGIN_FAIL":
             dq = self._failed_logins[ip]
             dq.append(now)
             while dq and (now - dq[0]) > 300:
                 dq.popleft()
-            if len(dq) >= 5:
+            last_burst_at = self._last_failed_login_burst_alert_at[ip]
+            if len(dq) >= 5 and (now - last_burst_at) > 10:
                 self._record_incident("FAILED_LOGIN_BURST", event, self.weights["FAILED_LOGIN_BURST"], {"attempts5m": len(dq)})
+                self._last_failed_login_burst_alert_at[ip] = now
 
             attempted_username = str((metadata.get("username") if isinstance(metadata, dict) else "") or "").strip().lower()
             if attempted_username:
@@ -297,12 +317,13 @@ class DetectionEngine:
         # INJECTION_ATTEMPT alerts from the same HTTP request.
         is_honeypot_followup = self._is_honeypot_followup_audit(event, now)
         traversal_signals = ["../", "..\\", "%2e%2e", "%252e%252e", "..%2f", "..%5c"]
-        injection_signals = ["$ne", "union select", " or 1=1", "<script", "drop table"]
-        context_blob = json.dumps(metadata).lower() + " " + endpoint + " " + error_type
-        if event.get("event") != "REQUEST_AUDIT" and not is_honeypot_followup and any(signal in context_blob for signal in traversal_signals):
+        context_blob = self._decode_for_signatures(json.dumps(metadata)) + " " + endpoint + " " + decoded_endpoint + " " + error_type
+        if (
+            not is_honeypot_followup
+            and any(signal in context_blob for signal in traversal_signals)
+            and not self._is_duplicate_signature_alert("PATH_TRAVERSAL_ATTEMPT", ip, method, endpoint, now)
+        ):
             self._record_incident("PATH_TRAVERSAL_ATTEMPT", event, self.weights["PATH_TRAVERSAL_ATTEMPT"], {"endpoint": endpoint})
-        if event.get("event") != "REQUEST_AUDIT" and not is_honeypot_followup and any(signal in context_blob for signal in injection_signals):
-            self._record_incident("INJECTION_ATTEMPT", event, self.weights["INJECTION_ATTEMPT"], {"endpoint": endpoint})
 
         # Count honeypot probes once, based only on the dedicated honeypot event
         # emitted by the webapp route itself. REQUEST_AUDIT lines for the same
@@ -322,52 +343,6 @@ class DetectionEngine:
                 "ABNORMAL_REQUEST_FREQUENCY", event, self.weights["ABNORMAL_REQUEST_FREQUENCY"], {"rpm": len(req_dq)}
             )
 
-        if method == "POST" and endpoint.endswith("/refresh") and user_id != "anonymous":
-            self._user_token_ips[user_id].add(ip)
-            if len(self._user_token_ips[user_id]) >= 3:
-                self._record_incident(
-                    "SUSPICIOUS_JWT_REUSE",
-                    event,
-                    self.weights["SUSPICIOUS_JWT_REUSE"],
-                    {"distinctIps": len(self._user_token_ips[user_id])},
-                )
-            token_fp = metadata.get("tokenFingerprint")
-            if token_fp:
-                self._token_fingerprint_ips[token_fp].add(ip)
-                if len(self._token_fingerprint_ips[token_fp]) >= 2:
-                    self._record_incident(
-                        "SUSPICIOUS_JWT_REUSE",
-                        event,
-                        self.weights["SUSPICIOUS_JWT_REUSE"],
-                        {"tokenFingerprint": token_fp, "distinctIps": len(self._token_fingerprint_ips[token_fp])},
-                    )
-
-        if "jwt" in metadata:
-            # The Python SOC can delegate cryptographic verification to the C++ core when raw JWT is available.
-            verification = self._crypto.verify_jwt(str(metadata["jwt"]))
-            if not verification.get("valid", False):
-                self._record_incident(
-                    "SUSPICIOUS_JWT_REUSE",
-                    event,
-                    self.weights["SUSPICIOUS_JWT_REUSE"],
-                    {"reason": verification.get("error")},
-                )
-
-        if event.get("event") == "LOGIN_SUCCESS" and user_id != "anonymous":
-            history = self._baseline_logins[user_id]
-            history.append(now)
-            while history and (now - history[0]) > 86400 * 14:
-                history.popleft()
-            if len(history) >= 10:
-                per_hour = len(history) / (14 * 24)
-                last_hour = len([ts for ts in history if now - ts <= 3600])
-                if last_hour > max(3, per_hour * 6):
-                    self._record_incident(
-                        "ABNORMAL_REQUEST_FREQUENCY",
-                        event,
-                        self.weights["ABNORMAL_REQUEST_FREQUENCY"],
-                        {"baselineLoginsPerHour": round(per_hour, 2), "recentLogins1h": last_hour},
-                    )
 
     def ingest_line(self, line: str) -> None:
         line = line.strip()

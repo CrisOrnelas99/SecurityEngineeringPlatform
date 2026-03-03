@@ -1,6 +1,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
+import rateLimit from "express-rate-limit";
 import { v4 as uuidv4 } from "uuid";
 import { validateBody, loginSchema, registerSchema } from "../middleware/validation.js";
 import { callCryptoCore } from "../services/cryptoCoreClient.js";
@@ -13,9 +14,33 @@ import {
 } from "../services/userStore.js";
 import { writeAuditLog } from "../utils/logger.js";
 import { isLockedUser } from "../middleware/threatControls.js";
+import { clearLoginProtection, getLoginProtectionState, recordLoginFailure } from "../middleware/loginProtection.js";
 
 const router = express.Router();
 const tokenFingerprint = (token) => crypto.createHash("sha256").update(token).digest("hex").slice(0, 16);
+
+const loginRateLimiter = rateLimit({
+  windowMs: Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 60 * 1000),
+  max: Number(process.env.LOGIN_RATE_LIMIT_MAX || 12),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  handler: (req, res) => {
+    writeAuditLog({ req, event: "LOGIN_RATE_LIMIT", success: false, errorType: "RateLimitExceeded" });
+    res.status(429).json({ error: "Too many login attempts. Try again shortly." });
+  }
+});
+
+const refreshRateLimiter = rateLimit({
+  windowMs: Number(process.env.REFRESH_RATE_LIMIT_WINDOW_MS || 60 * 1000),
+  max: Number(process.env.REFRESH_RATE_LIMIT_MAX || 30),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    writeAuditLog({ req, event: "REFRESH_RATE_LIMIT", success: false, errorType: "RateLimitExceeded" });
+    res.status(429).json({ error: "Too many token refresh requests." });
+  }
+});
 
 function createTokens(user) {
   const accessToken = jwt.sign(
@@ -57,11 +82,27 @@ router.post("/register", validateBody(registerSchema), async (req, res) => {
   }
 });
 
-router.post("/login", validateBody(loginSchema), async (req, res) => {
+router.post("/login", loginRateLimiter, validateBody(loginSchema), async (req, res) => {
   const { username, password } = req.body;
+  const protection = getLoginProtectionState(req, username);
+  if (protection.retryAfterMs > 0) {
+    const retryAfterSeconds = Math.max(1, Math.ceil(protection.retryAfterMs / 1000));
+    res.set("Retry-After", String(retryAfterSeconds));
+    writeAuditLog({
+      req,
+      event: "LOGIN_THROTTLED",
+      success: false,
+      errorType: "BackoffActive",
+      metadata: { username, retryAfterSeconds }
+    });
+    res.status(429).json({ error: "Too many failed login attempts. Try again later." });
+    return;
+  }
+
   const user = findUserByUsername(username);
 
   if (!user) {
+    recordLoginFailure(req, username);
     writeAuditLog({ req, event: "LOGIN_FAIL", success: false, errorType: "UserNotFound", metadata: { username } });
     res.status(401).json({ error: "Invalid credentials" });
     return;
@@ -75,6 +116,7 @@ router.post("/login", validateBody(loginSchema), async (req, res) => {
   try {
     const verifyResult = await callCryptoCore("verify-password", { password, hash: user.passwordHash });
     if (!verifyResult.valid) {
+      recordLoginFailure(req, username);
       writeAuditLog({ req, event: "LOGIN_FAIL", success: false, userId: user.id, errorType: "BadPassword" });
       res.status(401).json({ error: "Invalid credentials" });
       return;
@@ -82,6 +124,7 @@ router.post("/login", validateBody(loginSchema), async (req, res) => {
 
     const { accessToken, refreshToken } = createTokens(user);
     storeRefreshToken({ token: refreshToken, userId: user.id, createdAt: new Date().toISOString() });
+    clearLoginProtection(req, username);
 
     writeAuditLog({ req, event: "LOGIN_SUCCESS", success: true, userId: user.id, metadata: { role: user.role } });
     res.json({ accessToken, refreshToken, user: { id: user.id, username: user.username, role: user.role } });
@@ -91,7 +134,7 @@ router.post("/login", validateBody(loginSchema), async (req, res) => {
   }
 });
 
-router.post("/refresh", async (req, res) => {
+router.post("/refresh", refreshRateLimiter, async (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken || !hasRefreshToken(refreshToken)) {
     writeAuditLog({

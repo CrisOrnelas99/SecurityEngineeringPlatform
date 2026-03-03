@@ -54,6 +54,7 @@ services:
       - SECURITY_CORE_BIN=/opt/security_core/build/security_core
       - SOC_LOAD_PERSISTED_STATE=false
       - SOC_REPLAY_LOG_ON_START=false
+      - SOC_AUTO_BLOCK_PRIVATE_IPS=true
     ports:
       - "8000:8000"
     volumes:

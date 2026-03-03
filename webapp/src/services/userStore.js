@@ -1,60 +1,74 @@
-import fs from "node:fs";
-import path from "node:path";
+import db from "./db.js";
 
-const usersPath = path.join(process.cwd(), "data", "users.json");
-const refreshTokenPath = path.join(process.cwd(), "data", "refreshTokens.json");
-
-function readJson(filePath, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch {
-    return fallback;
+function mapUserRow(row) {
+  if (!row) {
+    return null;
   }
-}
-
-function writeJson(filePath, data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  return {
+    id: row.id,
+    username: row.username,
+    role: row.role,
+    passwordHash: row.password_hash,
+    createdAt: row.created_at
+  };
 }
 
 export function getUsers() {
-  return readJson(usersPath, []);
+  const rows = db
+    .prepare("SELECT id, username, role, password_hash, created_at FROM users ORDER BY datetime(created_at) ASC")
+    .all();
+  return rows.map(mapUserRow);
 }
 
 export function findUserByUsername(username) {
-  return getUsers().find((u) => u.username === username);
+  const row = db
+    .prepare("SELECT id, username, role, password_hash, created_at FROM users WHERE username = ? LIMIT 1")
+    .get(String(username || ""));
+  return mapUserRow(row);
 }
 
 export function findUserById(id) {
-  return getUsers().find((u) => u.id === id);
+  const row = db
+    .prepare("SELECT id, username, role, password_hash, created_at FROM users WHERE id = ? LIMIT 1")
+    .get(String(id || ""));
+  return mapUserRow(row);
 }
 
 export function saveUser(user) {
-  const users = getUsers();
-  users.push(user);
-  writeJson(usersPath, users);
+  db.prepare(
+    "INSERT INTO users (id, username, role, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
+  ).run(
+    String(user.id),
+    String(user.username),
+    String(user.role),
+    String(user.passwordHash),
+    String(user.createdAt)
+  );
 }
 
 export function updateUser(updateUserData) {
-  const users = getUsers();
-  const idx = users.findIndex((u) => u.id === updateUserData.id);
-  if (idx >= 0) {
-    users[idx] = updateUserData;
-    writeJson(usersPath, users);
-  }
+  db.prepare(
+    "UPDATE users SET username = ?, role = ?, password_hash = ?, created_at = ? WHERE id = ?"
+  ).run(
+    String(updateUserData.username),
+    String(updateUserData.role),
+    String(updateUserData.passwordHash),
+    String(updateUserData.createdAt),
+    String(updateUserData.id)
+  );
 }
 
 export function storeRefreshToken(record) {
-  const tokens = readJson(refreshTokenPath, []);
-  tokens.push(record);
-  writeJson(refreshTokenPath, tokens);
+  db.prepare(
+    "INSERT OR REPLACE INTO refresh_tokens (token, user_id, created_at) VALUES (?, ?, ?)"
+  ).run(String(record.token), String(record.userId), String(record.createdAt));
 }
 
 export function revokeRefreshToken(token) {
-  const tokens = readJson(refreshTokenPath, []);
-  writeJson(refreshTokenPath, tokens.filter((t) => t.token !== token));
+  db.prepare("DELETE FROM refresh_tokens WHERE token = ?").run(String(token || ""));
 }
 
 export function hasRefreshToken(token) {
-  const tokens = readJson(refreshTokenPath, []);
-  return tokens.some((t) => t.token === token);
+  const row = db.prepare("SELECT 1 AS found FROM refresh_tokens WHERE token = ? LIMIT 1").get(String(token || ""));
+  return Boolean(row?.found);
 }

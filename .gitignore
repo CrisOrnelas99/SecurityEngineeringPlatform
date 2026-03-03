@@ -14,3 +14,4 @@ gitdata/
 .vscode/
 webapp/*.tmp
 webapp/tmp_cookie.txt
+webapp/data/*.db
