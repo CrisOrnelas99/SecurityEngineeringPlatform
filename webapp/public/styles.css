@@ -1,10 +1,14 @@
 :root {
-  --bg: #f3f7fb;
-  --ink: #0d223d;
-  --muted: #58708f;
-  --line: #d1deef;
-  --card: #ffffff;
-  --accent: #2062d4;
+  --bg-0: #05070b;
+  --bg-1: #0a0f18;
+  --bg-2: #111a2a;
+  --ink: #eaf2ff;
+  --muted: #9aacc7;
+  --line: rgba(145, 174, 224, 0.28);
+  --card: rgba(15, 24, 38, 0.82);
+  --accent: #3ea6ff;
+  --accent-2: #61ffb1;
+  --warn: #ffd166;
 }
 
 * {
@@ -15,7 +19,10 @@ body {
   margin: 0;
   font-family: "Segoe UI", Tahoma, sans-serif;
   color: var(--ink);
-  background: linear-gradient(180deg, #e9f1ff, var(--bg));
+  background:
+    radial-gradient(1200px 700px at -10% -20%, rgba(46, 113, 255, 0.2) 0%, transparent 55%),
+    radial-gradient(900px 500px at 110% -10%, rgba(0, 210, 255, 0.15) 0%, transparent 55%),
+    linear-gradient(155deg, var(--bg-0), var(--bg-1) 45%, #0d1523 100%);
 }
 
 .wrap {
@@ -24,8 +31,12 @@ body {
 }
 
 .site-header {
-  background: #0f2d56;
-  border-bottom: 1px solid #244c82;
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  backdrop-filter: blur(7px);
+  background: rgba(9, 14, 23, 0.86);
+  border-bottom: 1px solid var(--line);
 }
 
 .nav {
@@ -37,9 +48,10 @@ body {
 }
 
 .brand {
-  color: #d7e6ff;
+  color: #e7f3ff;
   text-decoration: none;
   font-weight: 700;
+  letter-spacing: 0.3px;
 }
 
 .links {
@@ -48,20 +60,26 @@ body {
 }
 
 .links a {
-  color: #bcd3f7;
+  color: #bdd4f7;
   text-decoration: none;
+  opacity: 0.9;
+}
+
+.links a:hover {
+  color: #f4f9ff;
+  opacity: 1;
 }
 
 .cart-btn {
-  border: 1px solid #4d77ae;
-  background: transparent;
-  color: #d7e6ff;
+  border: 1px solid rgba(92, 170, 255, 0.55);
+  background: rgba(39, 76, 124, 0.2);
+  color: #dff0ff;
   border-radius: 8px;
   padding: 0.45rem 0.75rem;
 }
 
 .hero {
-  margin: 1.4rem 0;
+  margin: 1.5rem 0;
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
   gap: 1rem;
@@ -69,11 +87,15 @@ body {
 
 .hero-card,
 .deals,
-.support {
+.support,
+.card-like {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 1rem;
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .eyebrow {
@@ -102,22 +124,31 @@ h2 {
 
 .primary,
 button {
-  border: 0;
+  border: 1px solid rgba(99, 176, 255, 0.45);
   border-radius: 9px;
   padding: 0.6rem 0.95rem;
-  background: var(--accent);
-  color: white;
+  background: linear-gradient(160deg, rgba(52, 110, 186, 0.95), rgba(40, 85, 146, 0.95));
+  color: #f3f9ff;
   text-decoration: none;
   cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+button:hover,
+.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(62, 166, 255, 0.24);
 }
 
 input,
 textarea {
   width: 100%;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(131, 163, 210, 0.32);
   border-radius: 8px;
   padding: 0.6rem 0.65rem;
   font: inherit;
+  background: rgba(7, 12, 20, 0.72);
+  color: var(--ink);
 }
 
 .stack {
@@ -139,8 +170,8 @@ textarea {
 }
 
 .product {
-  background: var(--card);
-  border: 1px solid var(--line);
+  background: rgba(16, 27, 44, 0.86);
+  border: 1px solid rgba(122, 163, 226, 0.3);
   border-radius: 12px;
   padding: 0.8rem;
 }
@@ -149,8 +180,47 @@ textarea {
   margin: 0.15rem 0;
 }
 
+.mitre-card {
+  border: 1px solid rgba(119, 172, 255, 0.35);
+  border-radius: 12px;
+  padding: 0.75rem;
+  background: rgba(11, 19, 33, 0.8);
+}
+
+.mitre-id {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: var(--warn);
+  background: rgba(255, 209, 102, 0.12);
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+}
+
+.pill {
+  display: inline-block;
+  margin-right: 0.35rem;
+  margin-top: 0.25rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  border: 1px solid rgba(130, 187, 255, 0.35);
+  color: #cce8ff;
+}
+
 @media (max-width: 860px) {
   .hero {
     grid-template-columns: 1fr;
+  }
+
+  .nav {
+    flex-wrap: wrap;
+    padding: 0.5rem 0;
+  }
+
+  .links {
+    width: 100%;
+    overflow: auto;
+    padding-bottom: 0.2rem;
   }
 }

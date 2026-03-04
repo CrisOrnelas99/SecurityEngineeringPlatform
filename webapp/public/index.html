@@ -3,63 +3,70 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Northstar Market</title>
+  <title>Northstar CyberSec Portal</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="site-header">
     <div class="wrap nav">
-      <a class="brand" href="/">Northstar Market</a>
+      <a class="brand" href="/">Northstar CyberSec</a>
       <nav class="links">
-        <a href="#shop">Shop</a>
-        <a href="#deals">Deals</a>
+        <a href="#services">Services</a>
+        <a href="#threat-brief">Threat Brief</a>
+        <a href="#mitre">MITRE ATT&CK</a>
         <a href="#support">Support</a>
       </nav>
-      <button id="cartBtn" class="cart-btn">Cart (0)</button>
+      <button id="incidentBtn" class="cart-btn">Incidents Tracked (0)</button>
     </div>
   </header>
 
   <main class="wrap">
     <section class="hero">
       <div>
-        <p class="eyebrow">Trusted Everyday Essentials</p>
-        <h1>Fast local shopping with clean, simple checkout.</h1>
-        <p class="muted">Demo storefront used to generate normal web traffic and security monitoring telemetry.</p>
-        <a class="primary" href="#shop">Browse Products</a>
+        <p class="eyebrow">Blue Team Readiness Platform</p>
+        <h1>Northstar CyberSec client portal for simulated enterprise traffic.</h1>
+        <p class="muted">This app intentionally behaves like a normal business site so your SOC stack can monitor, detect, and respond to attacks in realistic web traffic.</p>
+        <a class="primary" href="#services">Explore Services</a>
       </div>
       <aside class="hero-card">
-        <h3>Popular Search</h3>
+        <h3>Threat Intel Search</h3>
         <form id="searchForm" class="stack">
-          <input id="searchInput" type="text" placeholder="Search products..." />
-          <button type="submit">Search</button>
+          <input id="searchInput" type="text" placeholder="Search by service, threat, or ATT&CK ID..." />
+          <button type="submit">Analyze</button>
         </form>
         <p id="searchMsg" class="small"></p>
       </aside>
     </section>
 
-    <section id="shop">
-      <h2>Featured Products</h2>
+    <section id="services">
+      <h2>Security Services</h2>
       <div id="productGrid" class="grid"></div>
     </section>
 
-    <section id="deals" class="deals">
-      <h2>Weekly Deals</h2>
-      <p class="muted">Sign up to receive alerts on seasonal discounts.</p>
+    <section id="threat-brief" class="deals">
+      <h2>Daily Threat Brief</h2>
+      <p class="muted">Subscribe for defensive advisories, detection recommendations, and incident summaries.</p>
       <form id="newsletterForm" class="row">
-        <input id="newsletterEmail" type="email" placeholder="name@email.com" required />
-        <button type="submit">Subscribe</button>
+        <input id="newsletterEmail" type="email" placeholder="soc-team@northstar.io" required />
+        <button type="submit">Subscribe Brief</button>
       </form>
       <p id="newsletterMsg" class="small"></p>
     </section>
 
+    <section id="mitre" class="mitre card-like">
+      <h2>MITRE ATT&CK Quick Reference</h2>
+      <p class="muted">Use these common techniques to align detections, triage logic, and response playbooks.</p>
+      <div id="mitreGrid" class="grid"></div>
+    </section>
+
     <section id="support" class="support">
-      <h2>Support</h2>
-      <p class="muted">Need help? Send a message and we will respond within 24 hours.</p>
+      <h2>Security Support Request</h2>
+      <p class="muted">Open an operations ticket for investigation, containment, or hardening guidance.</p>
       <form id="supportForm" class="stack">
-        <input id="supportName" type="text" placeholder="Name" required />
-        <input id="supportEmail" type="email" placeholder="Email" required />
-        <textarea id="supportBody" rows="4" placeholder="Message"></textarea>
-        <button type="submit">Send Message</button>
+        <input id="supportName" type="text" placeholder="Analyst Name" required />
+        <input id="supportEmail" type="email" placeholder="analyst@northstar.io" required />
+        <textarea id="supportBody" rows="4" placeholder="Incident details, IOC, timeline, impacted systems"></textarea>
+        <button type="submit">Submit Ticket</button>
       </form>
       <p id="supportMsg" class="small"></p>
     </section>
