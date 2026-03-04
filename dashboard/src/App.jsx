@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-const apiBase = import.meta.env.VITE_SOC_API_URL || "http://localhost:8000";
+const apiBase = import.meta.env.VITE_TDR_API_URL || "http://localhost:8000";
 const webApiBase = import.meta.env.VITE_WEB_API_URL || "http://localhost:3000";
 
 export default function App() {
@@ -40,14 +40,14 @@ export default function App() {
   const [summary, setSummary] = useState({
     activeAlerts: 0,
     applicationAlerts: 0,
-    socSystemAlerts: 0,
+    engineSystemAlerts: 0,
     blockedIps: 0,
     lockedUsers: 0,
     honeypotTriggers: 0,
     topAttackPatterns: []
   });
   const [alerts, setAlerts] = useState([]);
-  const [socAlerts, setSocAlerts] = useState([]);
+  const [systemAlerts, setSystemAlerts] = useState([]);
   const [risk, setRisk] = useState({ riskByIp: [], riskByUser: [] });
   const [timeline, setTimeline] = useState([]);
   const [blockedIps, setBlockedIps] = useState([]);
@@ -57,14 +57,14 @@ export default function App() {
       setSummary({
         activeAlerts: 0,
         applicationAlerts: 0,
-        socSystemAlerts: 0,
+        engineSystemAlerts: 0,
         blockedIps: 0,
         lockedUsers: 0,
         honeypotTriggers: 0,
         topAttackPatterns: []
       });
       setAlerts([]);
-      setSocAlerts([]);
+      setSystemAlerts([]);
       setRisk({ riskByIp: [], riskByUser: [] });
       setTimeline([]);
       setBlockedIps([]);
@@ -93,7 +93,7 @@ export default function App() {
         }
         setSummary(s);
         setAlerts((a.applicationAlerts || []).slice(-50).reverse());
-        setSocAlerts((a.socSystemAlerts || []).slice(-20).reverse());
+        setSystemAlerts((a.engineSystemAlerts || []).slice(-20).reverse());
         setRisk(r);
         setTimeline(t.slice(-60).reverse());
         setBlockedIps(b);
@@ -570,7 +570,7 @@ export default function App() {
         ...prev,
         activeAlerts: 0,
         applicationAlerts: 0,
-        socSystemAlerts: 0,
+        engineSystemAlerts: 0,
         honeypotTriggers: 0,
         topAttackPatterns: []
       }));
@@ -886,7 +886,7 @@ export default function App() {
   return (
     <div className="container">
       <div className="title-wrap">
-        <h1>SOC Security Dashboard</h1>
+        <h1>Threat Detection & Response Dashboard</h1>
       </div>
       <div className="header-row">
         <p className="small">Live visibility into alerts, automated response actions, and risk posture.</p>
@@ -914,7 +914,7 @@ export default function App() {
       {page === "dashboard" && !authState.accessToken ? (
         <section className="card">
           <h2>Authentication Required</h2>
-          <p className="small">Log in with a valid webapp account to access SOC telemetry.</p>
+          <p className="small">Log in with a valid webapp account to access threat telemetry.</p>
         </section>
       ) : null}
       {page !== "dashboard" || !authState.accessToken ? null : (
@@ -922,7 +922,7 @@ export default function App() {
       <section className="grid kpis">
         <div className="card"><h2>{summary.activeAlerts}</h2><div className="small">Active Alerts</div></div>
         <div className="card"><h2>{summary.applicationAlerts}</h2><div className="small">App Alerts</div></div>
-        <div className="card"><h2>{summary.socSystemAlerts}</h2><div className="small">SOC Alerts</div></div>
+        <div className="card"><h2>{summary.engineSystemAlerts}</h2><div className="small">Engine Alerts</div></div>
         <div className="card"><h2>{summary.blockedIps}</h2><div className="small">Blocked IPs</div></div>
         <div className="card"><h2>{summary.lockedUsers}</h2><div className="small">Locked Users</div></div>
         <div className="card"><h2>{summary.honeypotTriggers}</h2><div className="small">Honeypot Triggers</div></div>
@@ -999,10 +999,10 @@ export default function App() {
         </div>
 
         <div className="card">
-          <h2>SOC System Alerts</h2>
+          <h2>Detection Engine Alerts</h2>
           <div className="list">
-            {socAlerts.length ? (
-              socAlerts.map((alert) => (
+            {systemAlerts.length ? (
+              systemAlerts.map((alert) => (
                 <div className="item" key={alert.id}>
                   <div className="item-row">
                     <div><span className={`badge ${alert.riskLevel || "LOW"}`}>{alert.riskLevel || "LOW"}</span> {alert.type}</div>
@@ -1016,7 +1016,7 @@ export default function App() {
                 </div>
               ))
             ) : (
-              <div className="item"><div className="small">No SOC system alerts.</div></div>
+              <div className="item"><div className="small">No detection engine alerts.</div></div>
             )}
           </div>
         </div>

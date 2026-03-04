@@ -5,6 +5,6 @@ paths = [
 ]
 regexes = [
   '''change-[a-z-]*secret''',
-  '''VITE_SOC_API_URL=http://localhost:8000''',
+  '''VITE_TDR_API_URL=http://localhost:8000''',
   '''CORS_ORIGIN=http://localhost:5173'''
 ]

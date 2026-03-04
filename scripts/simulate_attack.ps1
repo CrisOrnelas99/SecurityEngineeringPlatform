@@ -1,6 +1,6 @@
 param(
   [string]$BaseUrl = "http://localhost:3000",
-  [string]$SocUrl = "http://localhost:8000",
+  [string]$TdrUrl = "http://localhost:8000",
   [int]$Rounds = 10,
   [int]$DelayMs = 120
 )
@@ -14,7 +14,7 @@ function Invoke-Probe {
 
   try {
     Invoke-WebRequest -UseBasicParsing -Uri $Url -Headers @{
-      "User-Agent" = "soc-sim/1.0"
+      "User-Agent" = "tdr-sim/1.0"
     } | Out-Null
   } catch {
     # Non-2xx is expected for probes and honeypots.
@@ -33,7 +33,7 @@ function Get-Summary {
   }
 }
 
-$before = Get-Summary -Url $SocUrl
+$before = Get-Summary -Url $TdrUrl
 if ($before) {
   Write-Host "Before: alerts=$($before.activeAlerts) blockedIps=$($before.blockedIps) honeypotTriggers=$($before.honeypotTriggers)"
 }
@@ -54,7 +54,7 @@ for ($i = 1; $i -le $Rounds; $i++) {
 }
 
 Start-Sleep -Seconds 2
-$after = Get-Summary -Url $SocUrl
+$after = Get-Summary -Url $TdrUrl
 if ($after) {
   Write-Host "After : alerts=$($after.activeAlerts) blockedIps=$($after.blockedIps) honeypotTriggers=$($after.honeypotTriggers)"
   Write-Host "Top patterns:"
@@ -62,6 +62,6 @@ if ($after) {
     Write-Host " - $($_.pattern): $($_.count)"
   }
 } else {
-  Write-Host "Could not read SOC summary from $SocUrl/summary"
+  Write-Host "Could not read threat summary from $TdrUrl/summary"
 }
 

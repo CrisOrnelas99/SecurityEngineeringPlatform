@@ -1,158 +1,146 @@
 # Security Engineering Platform
 
-A multi-service cybersecurity platform that combines secure API engineering, C++ cryptography, SOC detection, and automated response.
+Hands-on Threat Detection & Response + secure web application project for demonstrating practical cybersecurity engineering:
 
-## What This Project Demonstrates
-
-- Secure API design with defense-in-depth controls
-- Cryptographic operations implemented in C++ (libsodium + OpenSSL)
-- SOC-style detection and risk scoring from structured application logs
-- Automated response actions (IP block, account lock, timeline and alert generation)
-- End-to-end observability through a React security dashboard
+- Secure Node.js web app (`webapp`)
+- Python detection + response engine (`python_engine`)
+- C++ security core (`security_core`)
+- React Threat Detection & Response dashboard (`dashboard`)
 
 ## Architecture
 
 ```text
-React Dashboard (dashboard)
-        |
-        v
-Python SOC API + Detection Engine (python_engine)
-        |
-        v
-Node Secure API (webapp) ----> C++ Security Core CLI (security_core)
+Dashboard (React, :5173)
+   |
+   v
+Threat Detection API + Detection Engine (FastAPI, :8000)
+   |
+   v
+Secure Web App (Node/Express, :3000) <-> Security Core (C++ CLI)
 ```
 
-### Data and Control Flow
+## What It Implements
 
-1. `webapp` enforces application security controls and writes structured JSON logs.
-2. `python_engine` ingests events, detects suspicious behavior, computes risk, and triggers response actions.
-3. `security_core` provides cryptographic primitives for password, token, and file-security operations.
-4. `dashboard` visualizes alerts, risk, blocklist state, and incident timeline.
+### Web App Security Controls
+- JWT access/refresh auth
+- RBAC (`admin`, `analyst`)
+- CSRF protection
+- Rate limiting
+- Input validation (Zod)
+- Security headers (Helmet)
+- Honeypot routes:
+  - `/internal-debug`
+  - `/.env`
+  - `/admin-backup`
 
-## Cybersecurity Implementations
+### Threat Detections (Current)
+- `FAILED_LOGIN_BURST` (5+ failed logins from same IP, deduped)
+- `ACCOUNT_ENUMERATION` (5+ distinct usernames from same IP in 10 min)
+- `HONEYPOT_TRIGGER`
+- `PATH_TRAVERSAL_ATTEMPT`
+- `PRIV_ESC_ATTEMPT` (authorization denied on protected routes)
+- `EXCESSIVE_API_CALLS`
+- `ABNORMAL_REQUEST_FREQUENCY`
 
-### 1) Secure API Controls (`webapp`)
+### Automated Response
+- Risk scoring per IP/user (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`)
+- Auto-block source IP for incidents
+- Auto-lock user accounts at high user risk
+- Persist output artifacts:
+  - `webapp/data/blocklist.json`
+  - `webapp/data/locked_users.json`
+  - `webapp/logs/alerts.json`
+  - `webapp/logs/timeline.json`
 
-- JWT auth flows: login, refresh, logout
-- RBAC authorization middleware
-- Input validation with `zod`
-- Rate limiting (`express-rate-limit`)
-- Secure headers (`helmet`)
-- CSRF protection (`csurf`)
-- Upload restrictions (type and size checks)
-- Honeypot endpoints to detect malicious probing
-- Runtime enforcement of SOC outputs (blocked IPs, locked users)
+## Identity and User Management
 
-### 2) Cryptographic Core (`security_core`)
+- Shared SQLite DB for web app + threat dashboard login context (`webapp/data/security.db`)
+- Default admin (from compose env):
+  - Username: `admin`
+  - Password: `pass12345678`
+- Admin can:
+  - Create users
+  - Assign role (`analyst`/`admin`)
+  - Reset user password
+  - Delete users
+  - View locked users in dashboard Users panel
 
-- Argon2id password hashing and verification (`libsodium`)
-- JWT signing and verification (tamper + expiration checks)
-- AES-256-GCM file encryption/decryption (`OpenSSL`)
-- HMAC-SHA256 integrity checks with constant-time compare
-- JSON-based CLI interface for service-to-service integration
+## Run with Docker
 
-### 3) SOC Detection and Response (`python_engine`)
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
 
-Implemented detections include:
+Services:
+- Web app: `http://localhost:3000`
+- Threat Detection API: `http://localhost:8000`
+- Dashboard: `http://localhost:5173`
 
-- Failed login bursts
-- Account enumeration patterns
-- Suspicious JWT reuse across IPs
-- Privilege escalation attempts
-- Injection and path traversal indicators
-- Excessive request frequency
-- Honeypot triggers
-- Requests from blocked sources
+Note: `docker compose up` without `-d` will stay attached to logs (this is expected).
 
-Risk and response pipeline:
+## Testing Attack Scenarios
 
-- Weighted risk scoring per IP/user
-- Risk levels: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`
-- Automated actions:
-  - update `blocklist.json`
-  - update `locked_users.json`
-  - emit `alerts.json`
-  - append `timeline.json`
+### 1) Brute Force
+Attempt wrong password 5+ times for same user/IP.
 
-### 4) SOC Dashboard (`dashboard`)
+### 2) Account Enumeration
+Use one IP with many usernames and wrong passwords.
 
-- Active alerts with details view
-- Risk summary by source
-- Incident timeline
-- Blocked IP visibility and operations
-- Attack pattern distribution
+### 3) Honeypot
+```bash
+curl -i http://localhost:3000/internal-debug
+```
 
-## Repository Structure
+### 4) Path Traversal
+```bash
+curl -i "http://localhost:3000/admin-backup?path=../etc/passwd"
+```
+
+### 5) Excessive API Calls
+```bash
+for i in $(seq 1 150); do curl -s http://localhost:3000/api/health >/dev/null; done
+```
+
+## Useful Endpoints
+
+### Threat Detection API (`:8000`)
+- `GET /summary`
+- `GET /alerts`
+- `GET /alerts/categorized`
+- `GET /risk`
+- `GET /timeline`
+- `GET /blocked-ips`
+
+### Web App Auth/Admin (`:3000`)
+- `GET /api/csrf-token`
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `POST /api/auth/change-password`
+- `GET /api/auth/users` (admin)
+- `POST /api/auth/register` (admin creates user)
+- `POST /api/auth/users/:id/reset-password` (admin)
+- `DELETE /api/auth/users/:id` (admin)
+
+## Repository Layout
 
 ```text
 .
-|- .github/workflows/ci.yml
 |- dashboard/
 |- python_engine/
 |- security_core/
 |- webapp/
 |- scripts/
 |- docker-compose.yml
-|- .env.example
 `- README.md
 ```
 
-## Build and Run
+## CI
 
-### Prerequisites
-
-- Docker + Docker Compose
-- Or local toolchains: Node 20, Python 3.11+, CMake 3.16+, C++17 compiler
-
-### Quick Start (Docker)
-
-```bash
-cp .env.example .env
-docker compose build
-docker compose up
-```
-
-### Service Endpoints
-
-- Node API: `http://localhost:3000`
-- Python SOC API: `http://localhost:8000`
-- Dashboard: `http://localhost:5173`
-
-Common SOC endpoints:
-
-- `GET /summary`
-- `GET /alerts`
-- `GET /risk`
-- `GET /timeline`
-- `GET /blocked-ips`
-
-## CI and Security Automation
-
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs:
-
-- Node lint and dependency checks
-- Python compile checks and dependency audit
-- C++ configure/build verification
-- Secret scanning with Gitleaks
-
-## Demo Activity Simulation
-
-Generate SOC activity with the included script:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\simulate_attack.ps1
-```
-
-Higher volume example:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\simulate_attack.ps1 -Rounds 20 -DelayMs 50
-```
-
-## Secure Configuration Notes
-
-- Use `.env.example` as a template only.
-- Do not commit real secrets.
-- Use separate secrets per environment.
-- Rotate secrets after incidents and on schedule.
-- Avoid logging sensitive material.
+GitHub Actions (`.github/workflows/ci.yml`) validates:
+- Node/webapp checks
+- Python engine checks
+- C++ core configure/build
+- Secret scanning (Gitleaks)

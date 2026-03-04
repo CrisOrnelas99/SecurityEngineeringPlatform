@@ -92,8 +92,8 @@ function migrateFromJsonIfNeeded() {
 }
 
 function ensureDefaultAdminUser() {
-  const adminUsername = process.env.SOC_DEFAULT_ADMIN_USER || "admin";
-  const adminPassword = process.env.SOC_DEFAULT_ADMIN_PASS || "pass12345678";
+  const adminUsername = process.env.TDR_DEFAULT_ADMIN_USER || "admin";
+  const adminPassword = process.env.TDR_DEFAULT_ADMIN_PASS || "pass12345678";
   const existing = db
     .prepare("SELECT id, password_hash FROM users WHERE username = ? LIMIT 1")
     .get(adminUsername);

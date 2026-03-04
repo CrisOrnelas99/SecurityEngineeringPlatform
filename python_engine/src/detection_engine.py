@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote_plus
 
-logger = logging.getLogger("soc.engine")
+logger = logging.getLogger("tdr.engine")
 
 
 class DetectionEngine:
@@ -21,9 +21,9 @@ class DetectionEngine:
         self.locked_users_path = Path(os.getenv("LOCKED_USERS_PATH", "/data/locked_users.json"))
         self.alerts_path = Path(os.getenv("ALERTS_PATH", "/data/alerts.json"))
         self.timeline_path = Path(os.getenv("TIMELINE_PATH", "/data/timeline.json"))
-        self.load_persisted_state = self._env_bool("SOC_LOAD_PERSISTED_STATE", False)
-        self.replay_log_on_start = self._env_bool("SOC_REPLAY_LOG_ON_START", False)
-        self.auto_block_private_ips = self._env_bool("SOC_AUTO_BLOCK_PRIVATE_IPS", False)
+        self.load_persisted_state = self._env_bool("TDR_LOAD_PERSISTED_STATE", False)
+        self.replay_log_on_start = self._env_bool("TDR_REPLAY_LOG_ON_START", False)
+        self.auto_block_private_ips = self._env_bool("TDR_AUTO_BLOCK_PRIVATE_IPS", False)
 
         self._risk_by_ip: dict[str, int] = defaultdict(int)
         self._risk_by_user: dict[str, int] = defaultdict(int)

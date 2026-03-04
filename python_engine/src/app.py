@@ -13,7 +13,7 @@ from .detection_engine import DetectionEngine
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-app = FastAPI(title="SOC Detection Engine", version="1.0.0")
+app = FastAPI(title="Threat Detection and Response Engine", version="1.0.0")
 engine = DetectionEngine()
 
 app.add_middleware(
@@ -31,18 +31,18 @@ class BlockIpRequest(BaseModel):
 
 
 def _get_allowed_roles() -> set[str]:
-    raw = os.getenv("SOC_ALLOWED_ROLES", "admin,analyst")
+    raw = os.getenv("TDR_ALLOWED_ROLES", "admin,analyst")
     return {role.strip() for role in raw.split(",") if role.strip()}
 
 
-def require_soc_user(authorization: str | None = Header(default=None)) -> dict:
+def require_tdr_user(authorization: str | None = Header(default=None)) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
 
     token = authorization.split(" ", 1)[1].strip()
     secret = os.getenv("JWT_ACCESS_SECRET", "")
     if not secret:
-        raise HTTPException(status_code=500, detail="SOC auth secret not configured")
+        raise HTTPException(status_code=500, detail="Threat telemetry auth secret not configured")
 
     try:
         claims = jwt.decode(token, secret, algorithms=["HS256"])
@@ -67,28 +67,28 @@ def health() -> dict[str, str]:
 
 
 @app.get("/alerts")
-def get_alerts(_claims: dict = Depends(require_soc_user)) -> list[dict]:
+def get_alerts(_claims: dict = Depends(require_tdr_user)) -> list[dict]:
     snapshot = engine.snapshot()
-    return snapshot["alerts"] + _soc_system_alerts(snapshot)
+    return snapshot["alerts"] + _engine_system_alerts(snapshot)
 
 
 @app.get("/alerts/categorized")
-def get_alerts_categorized(_claims: dict = Depends(require_soc_user)) -> dict:
+def get_alerts_categorized(_claims: dict = Depends(require_tdr_user)) -> dict:
     snapshot = engine.snapshot()
     return {
         "applicationAlerts": snapshot["alerts"],
-        "socSystemAlerts": _soc_system_alerts(snapshot),
+        "engineSystemAlerts": _engine_system_alerts(snapshot),
     }
 
 
 @app.delete("/alerts")
-def clear_alerts(_claims: dict = Depends(require_soc_user)) -> dict:
+def clear_alerts(_claims: dict = Depends(require_tdr_user)) -> dict:
     cleared = engine.clear_alerts()
     return {"success": True, "cleared": cleared}
 
 
 @app.delete("/alerts/{alert_id}")
-def delete_alert(alert_id: str, _claims: dict = Depends(require_soc_user)) -> dict:
+def delete_alert(alert_id: str, _claims: dict = Depends(require_tdr_user)) -> dict:
     deleted = engine.delete_alert(alert_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Alert not found")
@@ -96,23 +96,23 @@ def delete_alert(alert_id: str, _claims: dict = Depends(require_soc_user)) -> di
 
 
 @app.get("/risk")
-def get_risk(_claims: dict = Depends(require_soc_user)) -> dict:
+def get_risk(_claims: dict = Depends(require_tdr_user)) -> dict:
     snapshot = engine.snapshot()
     return {"riskByIp": snapshot["riskByIp"], "riskByUser": snapshot["riskByUser"]}
 
 
 @app.get("/timeline")
-def get_timeline(_claims: dict = Depends(require_soc_user)) -> list[dict]:
+def get_timeline(_claims: dict = Depends(require_tdr_user)) -> list[dict]:
     return engine.snapshot()["timeline"]
 
 
 @app.get("/blocked-ips")
-def get_blocked_ips(_claims: dict = Depends(require_soc_user)) -> list[str]:
+def get_blocked_ips(_claims: dict = Depends(require_tdr_user)) -> list[str]:
     return engine.snapshot()["blockedIps"]
 
 
 @app.post("/blocked-ips")
-def add_blocked_ip(payload: BlockIpRequest, _claims: dict = Depends(require_soc_user)) -> dict:
+def add_blocked_ip(payload: BlockIpRequest, _claims: dict = Depends(require_tdr_user)) -> dict:
     try:
         added = engine.block_ip(payload.ip, payload.source)
     except ValueError:
@@ -121,7 +121,7 @@ def add_blocked_ip(payload: BlockIpRequest, _claims: dict = Depends(require_soc_
 
 
 @app.delete("/blocked-ips/{ip}")
-def remove_blocked_ip(ip: str, _claims: dict = Depends(require_soc_user)) -> dict:
+def remove_blocked_ip(ip: str, _claims: dict = Depends(require_tdr_user)) -> dict:
     try:
         removed = engine.unblock_ip(ip, "dashboard")
     except ValueError:
@@ -132,14 +132,14 @@ def remove_blocked_ip(ip: str, _claims: dict = Depends(require_soc_user)) -> dic
 
 
 @app.get("/summary")
-def get_summary(_claims: dict = Depends(require_soc_user)) -> dict:
+def get_summary(_claims: dict = Depends(require_tdr_user)) -> dict:
     snapshot = engine.snapshot()
-    soc_alerts = _soc_system_alerts(snapshot)
+    system_alerts = _engine_system_alerts(snapshot)
     honeypot_count = len([a for a in snapshot["alerts"] if a.get("type") == "HONEYPOT_TRIGGER"])
     return {
-        "activeAlerts": len(snapshot["alerts"]) + len(soc_alerts),
+        "activeAlerts": len(snapshot["alerts"]) + len(system_alerts),
         "applicationAlerts": len(snapshot["alerts"]),
-        "socSystemAlerts": len(soc_alerts),
+        "engineSystemAlerts": len(system_alerts),
         "blockedIps": len(snapshot["blockedIps"]),
         "lockedUsers": len(snapshot["lockedUsers"]),
         "honeypotTriggers": honeypot_count,
@@ -156,7 +156,7 @@ def _top_attack_patterns(alerts: list[dict]) -> list[dict]:
     return [{"pattern": key, "count": value} for key, value in ranked[:10]]
 
 
-def _soc_system_alerts(snapshot: dict) -> list[dict]:
+def _engine_system_alerts(snapshot: dict) -> list[dict]:
     alerts: list[dict] = []
     health = snapshot.get("health", {})
     backlog = int(health.get("ingestBacklogBytes", 0))
@@ -165,11 +165,11 @@ def _soc_system_alerts(snapshot: dict) -> list[dict]:
     if backlog > 65536:
         alerts.append(
             {
-                "id": "soc-ingest-lag",
+                "id": "engine-ingest-lag",
                 "timestamp": engine._now().isoformat(),
-                "type": "SOC_INGEST_LAG",
-                "source": "soc",
-                "ip": "soc-system",
+                "type": "ENGINE_INGEST_LAG",
+                "source": "tdr",
+                "ip": "detection-engine",
                 "userId": "system",
                 "score": 20,
                 "riskLevel": "MEDIUM",
@@ -184,11 +184,11 @@ def _soc_system_alerts(snapshot: dict) -> list[dict]:
     if parse_errors > 0:
         alerts.append(
             {
-                "id": "soc-log-parse-errors",
+                "id": "engine-log-parse-errors",
                 "timestamp": engine._now().isoformat(),
-                "type": "SOC_LOG_PARSE_ERRORS",
-                "source": "soc",
-                "ip": "soc-system",
+                "type": "ENGINE_LOG_PARSE_ERRORS",
+                "source": "tdr",
+                "ip": "detection-engine",
                 "userId": "system",
                 "score": 15,
                 "riskLevel": "LOW",

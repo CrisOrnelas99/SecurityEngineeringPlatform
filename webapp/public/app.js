@@ -2,12 +2,12 @@ const services = [
   {
     id: "svc-100",
     name: "Managed Detection and Response",
-    category: "SOC Operations",
+    category: "Threat Operations",
     summary: "24/7 triage, enrichment, and coordinated response for high-confidence threats."
   },
   {
     id: "svc-101",
-    name: "Attack Surface Monitoring",
+    name: "Attack Surface Detection",
     category: "Exposure Management",
     summary: "External asset inventory and drift detection across public-facing systems."
   },
@@ -25,8 +25,8 @@ const services = [
   },
   {
     id: "svc-104",
-    name: "Application Security Monitoring",
-    category: "AppSec + SOC",
+    name: "Application Security Detection",
+    category: "AppSec + Threat Ops",
     summary: "Runtime protection for brute force, traversal, honeypot, and abuse telemetry."
   },
   {
@@ -163,7 +163,7 @@ document.getElementById("newsletterForm").addEventListener("submit", (event) => 
 
 document.getElementById("supportForm").addEventListener("submit", (event) => {
   event.preventDefault();
-  document.getElementById("supportMsg").textContent = "Ticket submitted. SOC queue updated for analyst follow-up.";
+  document.getElementById("supportMsg").textContent = "Ticket submitted. threat queue updated for analyst follow-up.";
   event.target.reset();
 });
 

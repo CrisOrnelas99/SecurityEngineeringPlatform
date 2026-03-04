@@ -40,5 +40,12 @@
     "role": "analyst",
     "passwordHash": "scrypt$7ff1925699abd5f54f4b24dfcfbddf92$de031b7b029d172455f9372b785f45f0fa75540bb9d32ccde006bbec6efb180b6ae12849c2e1c2536a98992759ead650d08707d76b33675241d8c35e41184aef",
     "createdAt": "2026-03-02T23:22:33.612Z"
+  },
+  {
+    "id": "5846c9e0-bd33-4c94-9a1d-b76ea03782a5",
+    "username": "goose1",
+    "role": "analyst",
+    "passwordHash": "scrypt$feb8c9ef6f2ecdb4021b25570def4cad$e8a8b4932c46d68e17c8dee03a451302e8177c497c8d63f5e8584db395cfe1073703bf123727448113a26f0223950833d3df07448369b58f1a90f25ae7fac71f",
+    "createdAt": "2026-03-03T22:09:46.914Z"
   }
 ]
