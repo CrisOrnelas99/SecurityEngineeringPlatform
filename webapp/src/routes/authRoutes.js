@@ -3,18 +3,26 @@ import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import rateLimit from "express-rate-limit";
 import { v4 as uuidv4 } from "uuid";
-import { validateBody, loginSchema, registerSchema } from "../middleware/validation.js";
+import { validateBody, loginSchema, adminCreateUserSchema, changePasswordSchema, setInitialPasswordSchema } from "../middleware/validation.js";
 import { callCryptoCore } from "../services/cryptoCoreClient.js";
 import {
+  findUserById,
   findUserByUsername,
+  getUsers,
   saveUser,
   storeRefreshToken,
   hasRefreshToken,
-  revokeRefreshToken
+  revokeRefreshToken,
+  revokeRefreshTokensForUser,
+  updateUser,
+  deleteUserById
 } from "../services/userStore.js";
 import { writeAuditLog } from "../utils/logger.js";
-import { isLockedUser } from "../middleware/threatControls.js";
+import { getLockedUsers, isLockedUser } from "../middleware/threatControls.js";
 import { clearLoginProtection, getLoginProtectionState, recordLoginFailure } from "../middleware/loginProtection.js";
+import { authenticateToken } from "../middleware/auth.js";
+import { authorize } from "../middleware/rbac.js";
+import { getNewUserInitialPassword, setNewUserInitialPassword } from "../services/settingsStore.js";
 
 const router = express.Router();
 const tokenFingerprint = (token) => crypto.createHash("sha256").update(token).digest("hex").slice(0, 16);
@@ -56,8 +64,9 @@ function createTokens(user) {
   return { accessToken, refreshToken };
 }
 
-router.post("/register", validateBody(registerSchema), async (req, res) => {
-  const { username, password, role } = req.body;
+router.post("/register", authenticateToken, authorize("admin"), validateBody(adminCreateUserSchema), async (req, res) => {
+  const { username, role } = req.body;
+  const initialPassword = getNewUserInitialPassword();
   if (findUserByUsername(username)) {
     writeAuditLog({ req, event: "REGISTER_DENIED", success: false, errorType: "DuplicateUser" });
     res.status(409).json({ error: "User already exists" });
@@ -65,7 +74,7 @@ router.post("/register", validateBody(registerSchema), async (req, res) => {
   }
 
   try {
-    const hashResult = await callCryptoCore("hash-password", { password });
+    const hashResult = await callCryptoCore("hash-password", { password: initialPassword });
     const newUser = {
       id: uuidv4(),
       username,
@@ -74,12 +83,52 @@ router.post("/register", validateBody(registerSchema), async (req, res) => {
       createdAt: new Date().toISOString()
     };
     saveUser(newUser);
-    writeAuditLog({ req, event: "REGISTER_SUCCESS", success: true, userId: newUser.id, metadata: { role } });
-    res.status(201).json({ id: newUser.id, username, role });
+    writeAuditLog({
+      req,
+      event: "REGISTER_SUCCESS",
+      success: true,
+      userId: req.user?.sub || null,
+      metadata: { createdUserId: newUser.id, createdUsername: username, role }
+    });
+    res.status(201).json({
+      id: newUser.id,
+      username,
+      role,
+      temporaryPassword: initialPassword
+    });
   } catch (error) {
+    if (String(error?.code || "") === "SQLITE_CONSTRAINT_UNIQUE") {
+      writeAuditLog({ req, event: "REGISTER_DENIED", success: false, errorType: "DuplicateUser" });
+      res.status(409).json({ error: "User already exists" });
+      return;
+    }
     writeAuditLog({ req, event: "REGISTER_FAIL", success: false, errorType: error.name, metadata: { reason: error.message } });
     res.status(500).json({ error: "Registration failed" });
   }
+});
+
+router.get("/settings", authenticateToken, authorize("admin"), (req, res) => {
+  const newUserInitialPassword = getNewUserInitialPassword();
+  writeAuditLog({
+    req,
+    event: "SETTINGS_READ",
+    success: true,
+    userId: req.user?.sub || null
+  });
+  res.json({ newUserInitialPassword });
+});
+
+router.post("/settings/new-user-password", authenticateToken, authorize("admin"), validateBody(setInitialPasswordSchema), (req, res) => {
+  const { newUserInitialPassword } = req.body;
+  setNewUserInitialPassword(newUserInitialPassword);
+  writeAuditLog({
+    req,
+    event: "SETTINGS_UPDATE",
+    success: true,
+    userId: req.user?.sub || null,
+    metadata: { key: "new_user_initial_password" }
+  });
+  res.json({ success: true, message: "Default new-user password updated." });
 });
 
 router.post("/login", loginRateLimiter, validateBody(loginSchema), async (req, res) => {
@@ -135,7 +184,7 @@ router.post("/login", loginRateLimiter, validateBody(loginSchema), async (req, r
 });
 
 router.post("/refresh", refreshRateLimiter, async (req, res) => {
-  const { refreshToken } = req.body;
+  const refreshToken = req.body?.refreshToken;
   if (!refreshToken || !hasRefreshToken(refreshToken)) {
     writeAuditLog({
       req,
@@ -174,8 +223,134 @@ router.post("/refresh", refreshRateLimiter, async (req, res) => {
   }
 });
 
+router.get("/me", authenticateToken, (req, res) => {
+  const user = findUserById(req.user.sub);
+  if (!user) {
+    writeAuditLog({ req, event: "PROFILE_FAIL", success: false, userId: req.user.sub, errorType: "UserNotFound" });
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  writeAuditLog({ req, event: "PROFILE_SUCCESS", success: true, userId: user.id });
+  res.json({
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    createdAt: user.createdAt
+  });
+});
+
+router.post("/change-password", authenticateToken, validateBody(changePasswordSchema), async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const user = findUserById(req.user.sub);
+  if (!user) {
+    writeAuditLog({ req, event: "PASSWORD_CHANGE_FAIL", success: false, userId: req.user.sub, errorType: "UserNotFound" });
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  try {
+    const currentCheck = await callCryptoCore("verify-password", { password: currentPassword, hash: user.passwordHash });
+    if (!currentCheck.valid) {
+      writeAuditLog({ req, event: "PASSWORD_CHANGE_FAIL", success: false, userId: user.id, errorType: "BadPassword" });
+      res.status(401).json({ error: "Current password is incorrect" });
+      return;
+    }
+
+    const hashResult = await callCryptoCore("hash-password", { password: newPassword });
+    updateUser({ ...user, passwordHash: hashResult.hash });
+    revokeRefreshTokensForUser(user.id);
+
+    writeAuditLog({ req, event: "PASSWORD_CHANGE_SUCCESS", success: true, userId: user.id });
+    res.json({ success: true, message: "Password updated. Please log in again." });
+  } catch (error) {
+    writeAuditLog({
+      req,
+      event: "PASSWORD_CHANGE_FAIL",
+      success: false,
+      userId: user.id,
+      errorType: error.name,
+      metadata: { reason: error.message }
+    });
+    res.status(500).json({ error: "Password update failed" });
+  }
+});
+
+router.get("/users", authenticateToken, authorize("admin"), (req, res) => {
+  const locked = getLockedUsers();
+  const users = getUsers().map((user) => ({
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    createdAt: user.createdAt,
+    locked: locked.has(user.id)
+  }));
+  writeAuditLog({
+    req,
+    event: "USERS_LIST",
+    success: true,
+    userId: req.user?.sub || null,
+    metadata: { count: users.length }
+  });
+  res.json(users);
+});
+
+router.post("/users/:id/reset-password", authenticateToken, authorize("admin"), async (req, res) => {
+  const userId = String(req.params.id || "");
+  const target = findUserById(userId);
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  try {
+    const temporaryPassword = getNewUserInitialPassword();
+    const hashResult = await callCryptoCore("hash-password", { password: temporaryPassword });
+    updateUser({ ...target, passwordHash: hashResult.hash });
+    revokeRefreshTokensForUser(target.id);
+    writeAuditLog({
+      req,
+      event: "USER_PASSWORD_RESET",
+      success: true,
+      userId: req.user?.sub || null,
+      metadata: { targetUserId: target.id, targetUsername: target.username }
+    });
+    res.json({ success: true, temporaryPassword });
+  } catch (error) {
+    writeAuditLog({
+      req,
+      event: "USER_PASSWORD_RESET_FAIL",
+      success: false,
+      userId: req.user?.sub || null,
+      errorType: error.name,
+      metadata: { targetUserId: target.id, reason: error.message }
+    });
+    res.status(500).json({ error: "Password reset failed" });
+  }
+});
+
+router.delete("/users/:id", authenticateToken, authorize("admin"), (req, res) => {
+  const userId = String(req.params.id || "");
+  if (userId === req.user?.sub) {
+    res.status(400).json({ error: "Cannot delete current user" });
+    return;
+  }
+  const deleted = deleteUserById(userId);
+  if (!deleted) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  writeAuditLog({
+    req,
+    event: "USER_DELETE",
+    success: true,
+    userId: req.user?.sub || null,
+    metadata: { deletedUserId: userId }
+  });
+  res.json({ success: true, deletedUserId: userId });
+});
+
 router.post("/logout", (req, res) => {
-  const { refreshToken } = req.body;
+  const refreshToken = req.body?.refreshToken;
   if (refreshToken) {
     revokeRefreshToken(refreshToken);
   }

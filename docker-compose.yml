@@ -24,6 +24,9 @@ services:
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-change-this-refresh-secret}
       - JWT_ACCESS_TTL=${JWT_ACCESS_TTL:-900}
       - JWT_REFRESH_TTL=${JWT_REFRESH_TTL:-604800}
+      - SOC_DEFAULT_ADMIN_USER=admin
+      - SOC_DEFAULT_ADMIN_PASS=pass12345678
+      - NEW_USER_INITIAL_PASSWORD=pass12345678
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
       - CSRF_COOKIE_SECRET=${CSRF_COOKIE_SECRET:-change-csrf-secret}
       - UPLOAD_DIR=/app/uploads
@@ -52,9 +55,11 @@ services:
       - ALERTS_PATH=/data/alerts.json
       - TIMELINE_PATH=/data/timeline.json
       - SECURITY_CORE_BIN=/opt/security_core/build/security_core
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-change-this-access-secret}
+      - SOC_ALLOWED_ROLES=admin,analyst
       - SOC_LOAD_PERSISTED_STATE=false
       - SOC_REPLAY_LOG_ON_START=false
-      - SOC_AUTO_BLOCK_PRIVATE_IPS=true
+      - SOC_AUTO_BLOCK_PRIVATE_IPS=false
     ports:
       - "8000:8000"
     volumes:

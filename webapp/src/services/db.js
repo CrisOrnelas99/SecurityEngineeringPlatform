@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import Database from "better-sqlite3";
 
 const dataDir = path.join(process.cwd(), "data");
@@ -28,6 +29,11 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   created_at TEXT NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `);
 
 function readJsonArray(filePath) {
@@ -37,6 +43,12 @@ function readJsonArray(filePath) {
   } catch {
     return [];
   }
+}
+
+function hashPasswordScrypt(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const derived = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `scrypt$${salt}$${derived}`;
 }
 
 function migrateFromJsonIfNeeded() {
@@ -79,6 +91,45 @@ function migrateFromJsonIfNeeded() {
   }
 }
 
+function ensureDefaultAdminUser() {
+  const adminUsername = process.env.SOC_DEFAULT_ADMIN_USER || "admin";
+  const adminPassword = process.env.SOC_DEFAULT_ADMIN_PASS || "pass12345678";
+  const existing = db
+    .prepare("SELECT id, password_hash FROM users WHERE username = ? LIMIT 1")
+    .get(adminUsername);
+
+  if (!existing) {
+    db.prepare(
+      "INSERT INTO users (id, username, role, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).run(
+      "admin-1",
+      adminUsername,
+      "admin",
+      hashPasswordScrypt(adminPassword),
+      new Date().toISOString()
+    );
+    return;
+  }
+
+  if (!existing.password_hash) {
+    db.prepare("UPDATE users SET role = ?, password_hash = ? WHERE id = ?").run(
+      "admin",
+      hashPasswordScrypt(adminPassword),
+      existing.id
+    );
+  }
+}
+
+function ensureDefaultAppSettings() {
+  const defaultInitialPassword = process.env.NEW_USER_INITIAL_PASSWORD || "pass12345678";
+  db.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)").run(
+    "new_user_initial_password",
+    defaultInitialPassword
+  );
+}
+
 migrateFromJsonIfNeeded();
+ensureDefaultAdminUser();
+ensureDefaultAppSettings();
 
 export default db;

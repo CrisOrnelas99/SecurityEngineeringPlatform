@@ -50,6 +50,10 @@ function maybeFallback(error, operation, payload) {
 }
 
 export function callCryptoCore(operation, payload) {
+  if (operation === "verify-password" && typeof payload?.hash === "string" && payload.hash.startsWith("scrypt$")) {
+    return Promise.resolve(verifyPasswordFallback(String(payload?.password || ""), payload.hash));
+  }
+
   return new Promise((resolve, reject) => {
     const child = spawn(coreBinary, [operation], { stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";

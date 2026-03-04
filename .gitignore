@@ -15,3 +15,5 @@ gitdata/
 webapp/*.tmp
 webapp/tmp_cookie.txt
 webapp/data/*.db
+webapp/data/*.db-wal
+webapp/data/*.db-shm

@@ -8,6 +8,7 @@ RUN apk add --no-cache python3 make g++ \
  && apk del python3 make g++
 
 COPY src ./src
+COPY public ./public
 COPY data ./data
 
 RUN mkdir -p /app/logs /app/uploads

@@ -58,6 +58,11 @@ export function updateUser(updateUserData) {
   );
 }
 
+export function deleteUserById(userId) {
+  const result = db.prepare("DELETE FROM users WHERE id = ?").run(String(userId || ""));
+  return result.changes > 0;
+}
+
 export function storeRefreshToken(record) {
   db.prepare(
     "INSERT OR REPLACE INTO refresh_tokens (token, user_id, created_at) VALUES (?, ?, ?)"
@@ -66,6 +71,10 @@ export function storeRefreshToken(record) {
 
 export function revokeRefreshToken(token) {
   db.prepare("DELETE FROM refresh_tokens WHERE token = ?").run(String(token || ""));
+}
+
+export function revokeRefreshTokensForUser(userId) {
+  db.prepare("DELETE FROM refresh_tokens WHERE user_id = ?").run(String(userId || ""));
 }
 
 export function hasRefreshToken(token) {

@@ -41,6 +41,7 @@ class DetectionEngine:
         self._recent_signature_alerts: dict[tuple[str, str, str, str], float] = {}
 
         self._file_position = 0
+        self._json_parse_errors = 0
         self._lock = threading.Lock()
 
         self.weights = {
@@ -262,7 +263,6 @@ class DetectionEngine:
 
     def _detect(self, event: dict[str, Any]) -> None:
         ip = event.get("ip", "unknown")
-        user_id = event.get("userId") or "anonymous"
         endpoint_raw = event.get("endpoint") or ""
         endpoint = str(endpoint_raw).lower()
         decoded_endpoint = self._decode_for_signatures(str(endpoint_raw))
@@ -312,9 +312,8 @@ class DetectionEngine:
         if event.get("event") == "AUTHZ_DENIED":
             self._record_incident("PRIV_ESC_ATTEMPT", event, self.weights["PRIV_ESC_ATTEMPT"], {"endpoint": endpoint})
 
-        # Simple signature-based checks are useful as a first line before deeper parsing.
-        # Skip immediate REQUEST_AUDIT for a just-seen honeypot hit to avoid duplicate
-        # INJECTION_ATTEMPT alerts from the same HTTP request.
+        # Skip immediate REQUEST_AUDIT for a just-seen honeypot hit to avoid
+        # duplicate path-traversal alerts for the same request.
         is_honeypot_followup = self._is_honeypot_followup_audit(event, now)
         traversal_signals = ["../", "..\\", "%2e%2e", "%252e%252e", "..%2f", "..%5c"]
         context_blob = self._decode_for_signatures(json.dumps(metadata)) + " " + endpoint + " " + decoded_endpoint + " " + error_type
@@ -351,6 +350,8 @@ class DetectionEngine:
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
+            with self._lock:
+                self._json_parse_errors += 1
             return
 
         with self._lock:
@@ -450,6 +451,10 @@ class DetectionEngine:
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
+            try:
+                log_size = self.log_path.stat().st_size
+            except OSError:
+                log_size = 0
             return {
                 "alerts": self._alerts[-200:],
                 "riskByIp": [
@@ -463,4 +468,10 @@ class DetectionEngine:
                 "timeline": self._timeline[-300:],
                 "blockedIps": sorted(self._blocked_ips),
                 "lockedUsers": sorted(self._locked_users),
+                "health": {
+                    "logFilePosition": self._file_position,
+                    "logFileSize": log_size,
+                    "ingestBacklogBytes": max(0, log_size - self._file_position),
+                    "jsonParseErrors": self._json_parse_errors,
+                },
             }

@@ -36,3 +36,7 @@ export function isLockedUser(userId) {
   const locked = new Set(readList(lockedUsersPath));
   return locked.has(userId);
 }
+
+export function getLockedUsers() {
+  return new Set(readList(lockedUsersPath));
+}

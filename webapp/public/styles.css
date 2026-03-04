@@ -1,0 +1,156 @@
+:root {
+  --bg: #f3f7fb;
+  --ink: #0d223d;
+  --muted: #58708f;
+  --line: #d1deef;
+  --card: #ffffff;
+  --accent: #2062d4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  color: var(--ink);
+  background: linear-gradient(180deg, #e9f1ff, var(--bg));
+}
+
+.wrap {
+  width: min(1060px, 94%);
+  margin: 0 auto;
+}
+
+.site-header {
+  background: #0f2d56;
+  border-bottom: 1px solid #244c82;
+}
+
+.nav {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand {
+  color: #d7e6ff;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.links {
+  display: flex;
+  gap: 1rem;
+}
+
+.links a {
+  color: #bcd3f7;
+  text-decoration: none;
+}
+
+.cart-btn {
+  border: 1px solid #4d77ae;
+  background: transparent;
+  color: #d7e6ff;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+}
+
+.hero {
+  margin: 1.4rem 0;
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1rem;
+}
+
+.hero-card,
+.deals,
+.support {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+h1 {
+  margin: 0.4rem 0;
+  line-height: 1.2;
+}
+
+h2 {
+  margin: 0.3rem 0 0.7rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.primary,
+button {
+  border: 0;
+  border-radius: 9px;
+  padding: 0.6rem 0.95rem;
+  background: var(--accent);
+  color: white;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 0.65rem;
+  font: inherit;
+}
+
+.stack {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.product {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+
+.product h3 {
+  margin: 0.15rem 0;
+}
+
+@media (max-width: 860px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+}

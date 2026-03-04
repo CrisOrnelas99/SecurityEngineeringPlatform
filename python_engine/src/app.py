@@ -1,8 +1,12 @@
 import logging
+import os
 
 from fastapi import FastAPI
+from fastapi import Depends
+from fastapi import Header
 from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import jwt
 from pydantic import BaseModel
 
 from .detection_engine import DetectionEngine
@@ -26,6 +30,32 @@ class BlockIpRequest(BaseModel):
     source: str = "dashboard"
 
 
+def _get_allowed_roles() -> set[str]:
+    raw = os.getenv("SOC_ALLOWED_ROLES", "admin,analyst")
+    return {role.strip() for role in raw.split(",") if role.strip()}
+
+
+def require_soc_user(authorization: str | None = Header(default=None)) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    token = authorization.split(" ", 1)[1].strip()
+    secret = os.getenv("JWT_ACCESS_SECRET", "")
+    if not secret:
+        raise HTTPException(status_code=500, detail="SOC auth secret not configured")
+
+    try:
+        claims = jwt.decode(token, secret, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid access token")
+
+    role = str(claims.get("role") or "")
+    if role not in _get_allowed_roles():
+        raise HTTPException(status_code=403, detail="Insufficient role")
+
+    return claims
+
+
 @app.on_event("startup")
 def startup_event() -> None:
     engine.start_background()
@@ -37,18 +67,28 @@ def health() -> dict[str, str]:
 
 
 @app.get("/alerts")
-def get_alerts() -> list[dict]:
-    return engine.snapshot()["alerts"]
+def get_alerts(_claims: dict = Depends(require_soc_user)) -> list[dict]:
+    snapshot = engine.snapshot()
+    return snapshot["alerts"] + _soc_system_alerts(snapshot)
+
+
+@app.get("/alerts/categorized")
+def get_alerts_categorized(_claims: dict = Depends(require_soc_user)) -> dict:
+    snapshot = engine.snapshot()
+    return {
+        "applicationAlerts": snapshot["alerts"],
+        "socSystemAlerts": _soc_system_alerts(snapshot),
+    }
 
 
 @app.delete("/alerts")
-def clear_alerts() -> dict:
+def clear_alerts(_claims: dict = Depends(require_soc_user)) -> dict:
     cleared = engine.clear_alerts()
     return {"success": True, "cleared": cleared}
 
 
 @app.delete("/alerts/{alert_id}")
-def delete_alert(alert_id: str) -> dict:
+def delete_alert(alert_id: str, _claims: dict = Depends(require_soc_user)) -> dict:
     deleted = engine.delete_alert(alert_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Alert not found")
@@ -56,23 +96,23 @@ def delete_alert(alert_id: str) -> dict:
 
 
 @app.get("/risk")
-def get_risk() -> dict:
+def get_risk(_claims: dict = Depends(require_soc_user)) -> dict:
     snapshot = engine.snapshot()
     return {"riskByIp": snapshot["riskByIp"], "riskByUser": snapshot["riskByUser"]}
 
 
 @app.get("/timeline")
-def get_timeline() -> list[dict]:
+def get_timeline(_claims: dict = Depends(require_soc_user)) -> list[dict]:
     return engine.snapshot()["timeline"]
 
 
 @app.get("/blocked-ips")
-def get_blocked_ips() -> list[str]:
+def get_blocked_ips(_claims: dict = Depends(require_soc_user)) -> list[str]:
     return engine.snapshot()["blockedIps"]
 
 
 @app.post("/blocked-ips")
-def add_blocked_ip(payload: BlockIpRequest) -> dict:
+def add_blocked_ip(payload: BlockIpRequest, _claims: dict = Depends(require_soc_user)) -> dict:
     try:
         added = engine.block_ip(payload.ip, payload.source)
     except ValueError:
@@ -81,7 +121,7 @@ def add_blocked_ip(payload: BlockIpRequest) -> dict:
 
 
 @app.delete("/blocked-ips/{ip}")
-def remove_blocked_ip(ip: str) -> dict:
+def remove_blocked_ip(ip: str, _claims: dict = Depends(require_soc_user)) -> dict:
     try:
         removed = engine.unblock_ip(ip, "dashboard")
     except ValueError:
@@ -92,12 +132,14 @@ def remove_blocked_ip(ip: str) -> dict:
 
 
 @app.get("/summary")
-def get_summary() -> dict:
+def get_summary(_claims: dict = Depends(require_soc_user)) -> dict:
     snapshot = engine.snapshot()
-    active_alerts = [a for a in snapshot["alerts"] if a.get("type") != "BLACKLISTED_IP_ACCESS"]
+    soc_alerts = _soc_system_alerts(snapshot)
     honeypot_count = len([a for a in snapshot["alerts"] if a.get("type") == "HONEYPOT_TRIGGER"])
     return {
-        "activeAlerts": len(active_alerts),
+        "activeAlerts": len(snapshot["alerts"]) + len(soc_alerts),
+        "applicationAlerts": len(snapshot["alerts"]),
+        "socSystemAlerts": len(soc_alerts),
         "blockedIps": len(snapshot["blockedIps"]),
         "lockedUsers": len(snapshot["lockedUsers"]),
         "honeypotTriggers": honeypot_count,
@@ -112,3 +154,50 @@ def _top_attack_patterns(alerts: list[dict]) -> list[dict]:
         counts[alert_type] = counts.get(alert_type, 0) + 1
     ranked = sorted(counts.items(), key=lambda item: item[1], reverse=True)
     return [{"pattern": key, "count": value} for key, value in ranked[:10]]
+
+
+def _soc_system_alerts(snapshot: dict) -> list[dict]:
+    alerts: list[dict] = []
+    health = snapshot.get("health", {})
+    backlog = int(health.get("ingestBacklogBytes", 0))
+    parse_errors = int(health.get("jsonParseErrors", 0))
+
+    if backlog > 65536:
+        alerts.append(
+            {
+                "id": "soc-ingest-lag",
+                "timestamp": engine._now().isoformat(),
+                "type": "SOC_INGEST_LAG",
+                "source": "soc",
+                "ip": "soc-system",
+                "userId": "system",
+                "score": 20,
+                "riskLevel": "MEDIUM",
+                "endpoint": "log-ingest",
+                "method": "INTERNAL",
+                "errorType": "IngestLag",
+                "details": {"ingestBacklogBytes": backlog},
+                "actionsTaken": [],
+            }
+        )
+
+    if parse_errors > 0:
+        alerts.append(
+            {
+                "id": "soc-log-parse-errors",
+                "timestamp": engine._now().isoformat(),
+                "type": "SOC_LOG_PARSE_ERRORS",
+                "source": "soc",
+                "ip": "soc-system",
+                "userId": "system",
+                "score": 15,
+                "riskLevel": "LOW",
+                "endpoint": "log-ingest",
+                "method": "INTERNAL",
+                "errorType": "LogParseError",
+                "details": {"jsonParseErrors": parse_errors},
+                "actionsTaken": [],
+            }
+        )
+
+    return alerts

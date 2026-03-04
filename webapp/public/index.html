@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Northstar Market</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap nav">
+      <a class="brand" href="/">Northstar Market</a>
+      <nav class="links">
+        <a href="#shop">Shop</a>
+        <a href="#deals">Deals</a>
+        <a href="#support">Support</a>
+      </nav>
+      <button id="cartBtn" class="cart-btn">Cart (0)</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Trusted Everyday Essentials</p>
+        <h1>Fast local shopping with clean, simple checkout.</h1>
+        <p class="muted">Demo storefront used to generate normal web traffic and security monitoring telemetry.</p>
+        <a class="primary" href="#shop">Browse Products</a>
+      </div>
+      <aside class="hero-card">
+        <h3>Popular Search</h3>
+        <form id="searchForm" class="stack">
+          <input id="searchInput" type="text" placeholder="Search products..." />
+          <button type="submit">Search</button>
+        </form>
+        <p id="searchMsg" class="small"></p>
+      </aside>
+    </section>
+
+    <section id="shop">
+      <h2>Featured Products</h2>
+      <div id="productGrid" class="grid"></div>
+    </section>
+
+    <section id="deals" class="deals">
+      <h2>Weekly Deals</h2>
+      <p class="muted">Sign up to receive alerts on seasonal discounts.</p>
+      <form id="newsletterForm" class="row">
+        <input id="newsletterEmail" type="email" placeholder="name@email.com" required />
+        <button type="submit">Subscribe</button>
+      </form>
+      <p id="newsletterMsg" class="small"></p>
+    </section>
+
+    <section id="support" class="support">
+      <h2>Support</h2>
+      <p class="muted">Need help? Send a message and we will respond within 24 hours.</p>
+      <form id="supportForm" class="stack">
+        <input id="supportName" type="text" placeholder="Name" required />
+        <input id="supportEmail" type="email" placeholder="Email" required />
+        <textarea id="supportBody" rows="4" placeholder="Message"></textarea>
+        <button type="submit">Send Message</button>
+      </form>
+      <p id="supportMsg" class="small"></p>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

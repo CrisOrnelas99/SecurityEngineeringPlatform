@@ -5,6 +5,20 @@ const password = z.string().min(12).max(128);
 
 export const registerSchema = z.object({ username, password, role: z.enum(["analyst", "admin"]).default("analyst") });
 export const loginSchema = z.object({ username, password });
+export const adminCreateUserSchema = z.object({
+  username,
+  role: z.enum(["analyst", "admin"]).default("analyst")
+});
+export const changePasswordSchema = z.object({
+  currentPassword: password,
+  newPassword: password
+}).refine((v) => v.currentPassword !== v.newPassword, {
+  message: "New password must be different",
+  path: ["newPassword"]
+});
+export const setInitialPasswordSchema = z.object({
+  newUserInitialPassword: password
+});
 
 export const paymentSchema = z.object({
   amount: z.number().positive().max(100000),
