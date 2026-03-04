@@ -3,6 +3,7 @@
 Hands-on Threat Detection & Response + secure web application project for demonstrating practical cybersecurity engineering:
 
 - Secure Node.js web app (`webapp`)
+- WAF reverse proxy (ModSecurity + OWASP CRS via Nginx)
 - Python detection + response engine (`python_engine`)
 - C++ security core (`security_core`)
 - React Threat Detection & Response dashboard (`dashboard`)
@@ -16,7 +17,10 @@ Dashboard (React, :5173)
 Threat Detection API + Detection Engine (FastAPI, :8000)
    |
    v
-Secure Web App (Node/Express, :3000) <-> Security Core (C++ CLI)
+WAF/Reverse Proxy (Nginx + ModSecurity, :8080)
+   |
+   v
+Secure Web App (Node/Express, internal :3000) <-> Security Core (C++ CLI)
 ```
 
 ## What It Implements
@@ -32,6 +36,16 @@ Secure Web App (Node/Express, :3000) <-> Security Core (C++ CLI)
   - `/internal-debug`
   - `/.env`
   - `/admin-backup`
+
+### Edge Security Controls (WAF + Proxy)
+- Reverse proxy in front of the web app (`waf-proxy`)
+- ModSecurity with OWASP CRS rule set
+- Blocking mode enabled (`MODSEC_RULE_ENGINE=On`)
+- Tuned anomaly thresholds:
+  - inbound `ANOMALY_INBOUND=5`
+  - outbound `ANOMALY_OUTBOUND=4`
+- Traffic path for users:
+  - `http://localhost:8080` -> `webapp:3000`
 
 ### Threat Detections (Current)
 - `FAILED_LOGIN_BURST` (5+ failed logins from same IP, deduped)
@@ -73,9 +87,10 @@ docker compose up -d --build
 ```
 
 Services:
-- Web app: `http://localhost:3000`
+- Protected web app entry (WAF/proxy): `http://localhost:8080`
 - Threat Detection API: `http://localhost:8000`
 - Dashboard: `http://localhost:5173`
+- Internal-only webapp service (not published): `webapp:3000`
 
 Note: `docker compose up` without `-d` will stay attached to logs (this is expected).
 
@@ -89,18 +104,44 @@ Use one IP with many usernames and wrong passwords.
 
 ### 3) Honeypot
 ```bash
-curl -i http://localhost:3000/internal-debug
+curl -i http://localhost:8080/internal-debug
 ```
 
 ### 4) Path Traversal
 ```bash
-curl -i "http://localhost:3000/admin-backup?path=../etc/passwd"
+curl -i "http://localhost:8080/admin-backup?path=../etc/passwd"
 ```
 
 ### 5) Excessive API Calls
 ```bash
-for i in $(seq 1 150); do curl -s http://localhost:3000/api/health >/dev/null; done
+for i in $(seq 1 150); do curl -s http://localhost:8080/api/health >/dev/null; done
 ```
+
+### Attack Simulator Script
+The simulator now authenticates before pulling Threat Detection API summary data.
+
+PowerShell:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/simulate_attack.ps1 -Rounds 5 -DelayMs 120 -Username admin -Password pass12345678
+```
+
+## Quick Verification
+
+```bash
+# App through WAF
+curl -i http://localhost:8080/
+
+# WAF should block traversal payloads
+curl -i "http://localhost:8080/admin-backup?path=../etc/passwd"
+
+# Threat API health
+curl -i http://localhost:8000/health
+```
+
+Expected:
+- `GET /` on `:8080` returns `200`
+- Traversal probe returns `403` from WAF
+- `GET /health` on `:8000` returns `200`
 
 ## Useful Endpoints
 
@@ -112,7 +153,7 @@ for i in $(seq 1 150); do curl -s http://localhost:3000/api/health >/dev/null; d
 - `GET /timeline`
 - `GET /blocked-ips`
 
-### Web App Auth/Admin (`:3000`)
+### Web App Auth/Admin (via WAF at `:8080`)
 - `GET /api/csrf-token`
 - `POST /api/auth/login`
 - `POST /api/auth/refresh`
@@ -123,6 +164,10 @@ for i in $(seq 1 150); do curl -s http://localhost:3000/api/health >/dev/null; d
 - `POST /api/auth/register` (admin creates user)
 - `POST /api/auth/users/:id/reset-password` (admin)
 - `DELETE /api/auth/users/:id` (admin)
+
+### WAF/Proxy
+- Public app route: `http://localhost:8080`
+- For local troubleshooting only (internal service): `webapp:3000`
 
 ## Repository Layout
 
