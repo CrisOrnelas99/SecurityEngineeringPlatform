@@ -18,6 +18,7 @@ class DetectionEngine:
     def __init__(self) -> None:
         self.log_path = Path(os.getenv("WEB_LOG_PATH", "/data/app.log"))
         self.blocklist_path = Path(os.getenv("BLOCKLIST_PATH", "/data/blocklist.json"))
+        self.test_ips_path = Path(os.getenv("TEST_IPS_PATH", "/data/test_ips.json"))
         self.locked_users_path = Path(os.getenv("LOCKED_USERS_PATH", "/data/locked_users.json"))
         self.alerts_path = Path(os.getenv("ALERTS_PATH", "/data/alerts.json"))
         self.timeline_path = Path(os.getenv("TIMELINE_PATH", "/data/timeline.json"))
@@ -30,6 +31,7 @@ class DetectionEngine:
         self._alerts: list[dict[str, Any]] = []
         self._timeline: list[dict[str, Any]] = []
         self._blocked_ips: set[str] = set()
+        self._test_ips: set[str] = set()
         self._locked_users: set[str] = set()
 
         self._failed_logins: dict[str, deque[float]] = defaultdict(deque)
@@ -81,6 +83,7 @@ class DetectionEngine:
 
     def _persist_state(self) -> None:
         self._save_json_list(self.blocklist_path, sorted(self._blocked_ips))
+        self._save_json_list(self.test_ips_path, sorted(self._test_ips))
         self._save_json_list(self.locked_users_path, sorted(self._locked_users))
         self._save_json_list(self.alerts_path, self._alerts[-1000:])
         self._save_json_list(self.timeline_path, self._timeline[-2000:])
@@ -88,16 +91,19 @@ class DetectionEngine:
     def bootstrap_state(self) -> None:
         if self.load_persisted_state:
             self._blocked_ips = set(self._load_json_list(self.blocklist_path))
+            self._test_ips = set(self._load_json_list(self.test_ips_path))
             self._locked_users = set(self._load_json_list(self.locked_users_path))
             self._alerts = self._load_json_list(self.alerts_path)
             self._timeline = self._load_json_list(self.timeline_path)
         else:
             # Fresh start mode: clear historical artifacts so dashboard starts clean.
             self._blocked_ips = set()
+            self._test_ips = set()
             self._locked_users = set()
             self._alerts = []
             self._timeline = []
             self._save_json_list(self.blocklist_path, [])
+            self._save_json_list(self.test_ips_path, [])
             self._save_json_list(self.locked_users_path, [])
             self._save_json_list(self.alerts_path, [])
             self._save_json_list(self.timeline_path, [])
@@ -114,7 +120,10 @@ class DetectionEngine:
             ip = entry.get("ip", "unknown")
             user_id = entry.get("userId") or "anonymous"
             score_impact = int(entry.get("scoreImpact", 0))
-            self._risk_by_ip[ip] += score_impact
+            details = entry.get("details") or {}
+            is_test_ip = bool(details.get("isTestIp"))
+            if not is_test_ip:
+                self._risk_by_ip[ip] += score_impact
             self._risk_by_user[user_id] += score_impact
 
     def _risk_level(self, score: int) -> str:
@@ -154,8 +163,14 @@ class DetectionEngine:
     def _record_incident(self, event_type: str, event: dict[str, Any], score: int, details: dict[str, Any]) -> None:
         ip = event.get("ip", "unknown")
         user_id = event.get("userId") or "anonymous"
+        is_test_ip = ip in self._test_ips
+        details_payload = dict(details or {})
+        if is_test_ip:
+            details_payload["isTestIp"] = True
+            details_payload["description"] = "Test IP traffic detected. Alert recorded and auto-block skipped."
 
-        self._risk_by_ip[ip] += score
+        if not is_test_ip:
+            self._risk_by_ip[ip] += score
         self._risk_by_user[user_id] += score
 
         alert = {
@@ -169,7 +184,7 @@ class DetectionEngine:
             "endpoint": event.get("endpoint"),
             "method": event.get("method"),
             "errorType": event.get("errorType"),
-            "details": details,
+            "details": details_payload,
         }
 
         actions_taken = self._automated_response(alert)
@@ -184,7 +199,7 @@ class DetectionEngine:
                 "scoreImpact": score,
                 "cumulativeRisk": self._risk_by_ip[ip],
                 "actionsTaken": actions_taken,
-                "details": details,
+                "details": details_payload,
             }
         )
         if "BLACKLISTED_IP_ACCESS" in actions_taken:
@@ -218,10 +233,13 @@ class DetectionEngine:
         actions: list[str] = []
 
         # Auto-block source IP for every detected incident event.
+        # Test IPs are excluded so training traffic still generates alerts
+        # without polluting the blocklist.
         if ip and ip != "unknown":
             should_block = True
-            if not self.auto_block_private_ips and self._is_private_or_local_ip(ip):
+            if ip in self._test_ips:
                 should_block = False
+                actions.append("TEST_IP_NO_BLOCK")
             if should_block:
                 if ip not in self._blocked_ips:
                     actions.append("BLACKLISTED_IP_ACCESS")
@@ -330,17 +348,73 @@ class DetectionEngine:
         if event.get("event") == "HONEYPOT_TRIGGER":
             self._record_incident("HONEYPOT_TRIGGER", event, self.weights["HONEYPOT_TRIGGER"], {"endpoint": endpoint})
 
-        req_dq = self._request_times[ip]
-        req_dq.append(now)
-        while req_dq and (now - req_dq[0]) > 60:
-            req_dq.popleft()
-        if len(req_dq) > 80:
-            self._record_incident("EXCESSIVE_API_CALLS", event, self.weights["EXCESSIVE_API_CALLS"], {"rpm": len(req_dq)})
-
-        if len(req_dq) > 140:
-            self._record_incident(
-                "ABNORMAL_REQUEST_FREQUENCY", event, self.weights["ABNORMAL_REQUEST_FREQUENCY"], {"rpm": len(req_dq)}
+        # Admin management actions are timeline-only events (not active alerts).
+        if event.get("event") == "USER_DELETE":
+            self._timeline.append(
+                {
+                    "timestamp": self._now().isoformat(),
+                    "event": "ADMIN_DELETE_USER",
+                    "ip": ip,
+                    "userId": event.get("userId") or "anonymous",
+                    "scoreImpact": 0,
+                    "cumulativeRisk": self._risk_by_ip.get(ip, 0),
+                    "actionsTaken": [],
+                    "details": {
+                        "targetUserId": metadata.get("deletedUserId"),
+                        "targetUsername": metadata.get("targetUsername"),
+                    },
+                }
             )
+            self._persist_state()
+
+        if event.get("event") == "USER_PASSWORD_RESET":
+            self._timeline.append(
+                {
+                    "timestamp": self._now().isoformat(),
+                    "event": "ADMIN_RESET_USER_PASS",
+                    "ip": ip,
+                    "userId": event.get("userId") or "anonymous",
+                    "scoreImpact": 0,
+                    "cumulativeRisk": self._risk_by_ip.get(ip, 0),
+                    "actionsTaken": [],
+                    "details": {
+                        "targetUserId": metadata.get("targetUserId"),
+                        "targetUsername": metadata.get("targetUsername"),
+                    },
+                }
+            )
+            self._persist_state()
+
+        # Request-rate detections are based on request audit events only.
+        # Also ignore admin user-management endpoints to avoid noisy false positives
+        # during legitimate admin operations (delete/reset/change password flows).
+        if event.get("event") == "REQUEST_AUDIT":
+            is_admin_mgmt_endpoint = (
+                endpoint.startswith("/api/auth/users")
+                or endpoint.startswith("/api/auth/change-password")
+            )
+            if not is_admin_mgmt_endpoint:
+                req_dq = self._request_times[ip]
+                req_dq.append(now)
+                while req_dq and (now - req_dq[0]) > 60:
+                    req_dq.popleft()
+
+                # Keep global thresholds conservative to avoid noisy dashboard traffic,
+                # but allow lower lab thresholds for explicit /api/health burst tests.
+                if endpoint.startswith("/api/health"):
+                    excessive_threshold = 40
+                    abnormal_threshold = 80
+                else:
+                    excessive_threshold = 80
+                    abnormal_threshold = 140
+
+                if len(req_dq) > excessive_threshold:
+                    self._record_incident("EXCESSIVE_API_CALLS", event, self.weights["EXCESSIVE_API_CALLS"], {"rpm": len(req_dq)})
+
+                if len(req_dq) > abnormal_threshold:
+                    self._record_incident(
+                        "ABNORMAL_REQUEST_FREQUENCY", event, self.weights["ABNORMAL_REQUEST_FREQUENCY"], {"rpm": len(req_dq)}
+                    )
 
 
     def ingest_line(self, line: str) -> None:
@@ -389,6 +463,8 @@ class DetectionEngine:
     def block_ip(self, ip: str, source: str = "manual") -> bool:
         ipaddress.ip_address(ip)
         with self._lock:
+            if ip in self._test_ips:
+                raise ValueError("Test IP cannot be added to blocklist")
             added = ip not in self._blocked_ips
             self._blocked_ips.add(ip)
             if added:
@@ -406,6 +482,52 @@ class DetectionEngine:
             self._persist_state()
             logger.info("manual_block ip=%s source=%s added=%s", ip, source, added)
             return added
+
+    def add_test_ip(self, ip: str, source: str = "dashboard") -> bool:
+        ipaddress.ip_address(ip)
+        with self._lock:
+            added = ip not in self._test_ips
+            removed_from_blocklist = ip in self._blocked_ips
+            self._test_ips.add(ip)
+            if removed_from_blocklist:
+                self._blocked_ips.remove(ip)
+            if added or removed_from_blocklist:
+                self._timeline.append(
+                    {
+                        "timestamp": self._now().isoformat(),
+                        "event": "TEST_IP_ADDED",
+                        "ip": ip,
+                        "userId": "system",
+                        "scoreImpact": 0,
+                        "cumulativeRisk": self._risk_by_ip.get(ip, 0),
+                        "source": source,
+                        "details": {"removedFromBlocklist": removed_from_blocklist},
+                    }
+                )
+            self._persist_state()
+            logger.info("test_ip_add ip=%s source=%s added=%s removed_from_blocklist=%s", ip, source, added, removed_from_blocklist)
+            return added
+
+    def remove_test_ip(self, ip: str, source: str = "dashboard") -> bool:
+        ipaddress.ip_address(ip)
+        with self._lock:
+            if ip not in self._test_ips:
+                return False
+            self._test_ips.remove(ip)
+            self._timeline.append(
+                {
+                    "timestamp": self._now().isoformat(),
+                    "event": "TEST_IP_REMOVED",
+                    "ip": ip,
+                    "userId": "system",
+                    "scoreImpact": 0,
+                    "cumulativeRisk": self._risk_by_ip.get(ip, 0),
+                    "source": source,
+                }
+            )
+            self._persist_state()
+            logger.info("test_ip_remove ip=%s source=%s removed=true", ip, source)
+            return True
 
     def unblock_ip(self, ip: str, source: str = "manual") -> bool:
         ipaddress.ip_address(ip)
@@ -467,6 +589,7 @@ class DetectionEngine:
                 ],
                 "timeline": self._timeline[-300:],
                 "blockedIps": sorted(self._blocked_ips),
+                "testIps": sorted(self._test_ips),
                 "lockedUsers": sorted(self._locked_users),
                 "health": {
                     "logFilePosition": self._file_position,

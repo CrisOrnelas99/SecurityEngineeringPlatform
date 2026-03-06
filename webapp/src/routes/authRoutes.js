@@ -156,10 +156,13 @@ router.post("/login", loginRateLimiter, validateBody(loginSchema), async (req, r
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
-  if (isLockedUser(user.id)) {
+  if (isLockedUser(user.id) && user.role !== "admin") {
     writeAuditLog({ req, event: "LOGIN_FAIL", success: false, userId: user.id, errorType: "LockedUser" });
     res.status(423).json({ error: "Account locked" });
     return;
+  }
+  if (isLockedUser(user.id) && user.role === "admin") {
+    writeAuditLog({ req, event: "LOCKED_USER_BYPASS_ADMIN", success: true, userId: user.id });
   }
 
   try {
@@ -199,12 +202,21 @@ router.post("/refresh", refreshRateLimiter, async (req, res) => {
 
   try {
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-    if (isLockedUser(decoded.sub)) {
+    const refreshedUser = findUserById(decoded.sub);
+    const isAdmin = refreshedUser?.role === "admin";
+    if (isLockedUser(decoded.sub) && !isAdmin) {
       writeAuditLog({ req, event: "TOKEN_REFRESH_FAIL", success: false, userId: decoded.sub, errorType: "LockedUser" });
       res.status(423).json({ error: "Account locked" });
       return;
     }
-    const pseudoUser = { id: decoded.sub, username: "unknown", role: "analyst" };
+    if (isLockedUser(decoded.sub) && isAdmin) {
+      writeAuditLog({ req, event: "LOCKED_USER_BYPASS_ADMIN", success: true, userId: decoded.sub });
+    }
+    const pseudoUser = {
+      id: decoded.sub,
+      username: refreshedUser?.username || "unknown",
+      role: refreshedUser?.role || "analyst"
+    };
     const { accessToken, refreshToken: newRefreshToken } = createTokens(pseudoUser);
     revokeRefreshToken(refreshToken);
     storeRefreshToken({ token: newRefreshToken, userId: decoded.sub, createdAt: new Date().toISOString() });
@@ -334,6 +346,11 @@ router.delete("/users/:id", authenticateToken, authorize("admin"), (req, res) =>
     res.status(400).json({ error: "Cannot delete current user" });
     return;
   }
+  const targetUser = findUserById(userId);
+  if (!targetUser) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
   const deleted = deleteUserById(userId);
   if (!deleted) {
     res.status(404).json({ error: "User not found" });
@@ -344,7 +361,7 @@ router.delete("/users/:id", authenticateToken, authorize("admin"), (req, res) =>
     event: "USER_DELETE",
     success: true,
     userId: req.user?.sub || null,
-    metadata: { deletedUserId: userId }
+    metadata: { deletedUserId: userId, targetUsername: targetUser.username }
   });
   res.json({ success: true, deletedUserId: userId });
 });

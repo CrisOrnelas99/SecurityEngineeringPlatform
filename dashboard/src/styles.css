@@ -140,6 +140,11 @@ h2 {
   justify-self: end;
 }
 
+.tabs-spacer {
+  flex: 1 1 auto;
+  min-width: 1rem;
+}
+
 button {
   background: linear-gradient(160deg, rgba(31, 42, 58, 0.95) 0%, rgba(24, 33, 47, 0.95) 100%);
   color: var(--ink);
@@ -255,5 +260,9 @@ button:disabled {
     justify-content: flex-start;
     justify-self: start;
     flex-wrap: wrap;
+  }
+
+  .tabs-spacer {
+    display: none;
   }
 }

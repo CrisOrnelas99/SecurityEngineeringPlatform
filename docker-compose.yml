@@ -52,6 +52,8 @@ services:
       - ANOMALY_OUTBOUND=4
     ports:
       - "${WAF_PORT:-8080}:8080"
+    volumes:
+      - ./waf/modsecurity-override.conf:/etc/nginx/templates/modsecurity.d/modsecurity-override.conf.template:ro
 
   python-engine:
     build:

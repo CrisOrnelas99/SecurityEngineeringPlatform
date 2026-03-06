@@ -2,14 +2,28 @@ import React, { useEffect, useMemo, useState } from "react";
 
 const apiBase = import.meta.env.VITE_TDR_API_URL || "http://localhost:8000";
 const webApiBase = import.meta.env.VITE_WEB_API_URL || "http://localhost:3000";
+const AUTH_STORAGE_KEY = "tdr_dashboard_auth_state";
+
+function loadStoredAuthState() {
+  try {
+    const raw = sessionStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) {
+      return { accessToken: "", refreshToken: "", user: null };
+    }
+    const parsed = JSON.parse(raw);
+    return {
+      accessToken: typeof parsed?.accessToken === "string" ? parsed.accessToken : "",
+      refreshToken: typeof parsed?.refreshToken === "string" ? parsed.refreshToken : "",
+      user: parsed?.user && typeof parsed.user === "object" ? parsed.user : null
+    };
+  } catch {
+    return { accessToken: "", refreshToken: "", user: null };
+  }
+}
 
 export default function App() {
-  const [page, setPage] = useState("auth");
-  const [authState, setAuthState] = useState({
-    accessToken: "",
-    refreshToken: "",
-    user: null
-  });
+  const [authState, setAuthState] = useState(loadStoredAuthState);
+  const [page, setPage] = useState(authState.accessToken ? "dashboard" : "auth");
   const [authForm, setAuthForm] = useState({
     username: "",
     password: ""
@@ -22,14 +36,10 @@ export default function App() {
   const [alertStatus, setAlertStatus] = useState("");
   const [blockStatus, setBlockStatus] = useState("");
   const [blockIpInput, setBlockIpInput] = useState("");
+  const [testIpInput, setTestIpInput] = useState("");
   const [expandedAlerts, setExpandedAlerts] = useState({});
   const [expandedAlertGroups, setExpandedAlertGroups] = useState({});
   const [expandedTimeline, setExpandedTimeline] = useState({});
-  const [settingsPanels, setSettingsPanels] = useState({
-    account: true,
-    password: true,
-    adminDefaults: true
-  });
   const [adminDefaults, setAdminDefaults] = useState({ newUserInitialPassword: "" });
   const [defaultsForm, setDefaultsForm] = useState({ newUserInitialPassword: "" });
   const [showBlocklistTimelineEvents, setShowBlocklistTimelineEvents] = useState(false);
@@ -51,6 +61,25 @@ export default function App() {
   const [risk, setRisk] = useState({ riskByIp: [], riskByUser: [] });
   const [timeline, setTimeline] = useState([]);
   const [blockedIps, setBlockedIps] = useState([]);
+  const [testIps, setTestIps] = useState([]);
+
+  useEffect(() => {
+    try {
+      if (authState.accessToken || authState.refreshToken) {
+        sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
+      } else {
+        sessionStorage.removeItem(AUTH_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [authState]);
+
+  useEffect(() => {
+    if (authState.accessToken && page === "auth") {
+      setPage("dashboard");
+    }
+  }, [authState.accessToken, page]);
 
   useEffect(() => {
     if (!authState.accessToken) {
@@ -68,6 +97,7 @@ export default function App() {
       setRisk({ riskByIp: [], riskByUser: [] });
       setTimeline([]);
       setBlockedIps([]);
+      setTestIps([]);
       setAdminDefaults({ newUserInitialPassword: "" });
       setDefaultsForm({ newUserInitialPassword: "" });
       if (page !== "auth") {
@@ -78,15 +108,19 @@ export default function App() {
 
     let stop = false;
     const headers = { authorization: `Bearer ${authState.accessToken}` };
+    const isAdminSession = authState.user?.role === "admin";
 
     async function refresh() {
       try {
-        const [s, a, r, t, b] = await Promise.all([
+        const [s, a, r, t, b, testList] = await Promise.all([
           fetch(`${apiBase}/summary`, { headers }).then((res) => (res.ok ? res.json() : Promise.reject(new Error("summary failed")))),
           fetch(`${apiBase}/alerts/categorized`, { headers }).then((res) => (res.ok ? res.json() : Promise.reject(new Error("alerts failed")))),
           fetch(`${apiBase}/risk`, { headers }).then((res) => (res.ok ? res.json() : Promise.reject(new Error("risk failed")))),
           fetch(`${apiBase}/timeline`, { headers }).then((res) => (res.ok ? res.json() : Promise.reject(new Error("timeline failed")))),
-          fetch(`${apiBase}/blocked-ips`, { headers }).then((res) => (res.ok ? res.json() : Promise.reject(new Error("blocked-ips failed"))))
+          fetch(`${apiBase}/blocked-ips`, { headers }).then((res) => (res.ok ? res.json() : Promise.reject(new Error("blocked-ips failed")))),
+          isAdminSession
+            ? fetch(`${apiBase}/test-ips`, { headers }).then((res) => (res.ok ? res.json() : Promise.reject(new Error("test-ips failed"))))
+            : Promise.resolve([])
         ]);
         if (stop) {
           return;
@@ -97,6 +131,7 @@ export default function App() {
         setRisk(r);
         setTimeline(t.slice(-60).reverse());
         setBlockedIps(b);
+        setTestIps(testList);
       } catch {
         // Keep prior snapshot if refresh fails.
       }
@@ -108,7 +143,7 @@ export default function App() {
       stop = true;
       clearInterval(id);
     };
-  }, [authState.accessToken]);
+  }, [authState.accessToken, authState.user?.role]);
 
   useEffect(() => {
     if (!authState.accessToken) {
@@ -162,75 +197,145 @@ export default function App() {
   }, [authState.accessToken, authState.user?.role]);
 
   const topIp = useMemo(() => risk.riskByIp[0], [risk]);
-  const visibleAlerts = useMemo(
-    () => alerts.filter((alert) => alert.type !== "BLACKLISTED_IP_ACCESS"),
+  function isTimelineOnlyManagementEvent(endpointValue) {
+    const endpoint = String(endpointValue || "").toLowerCase();
+    return endpoint.includes("/api/auth/users") || endpoint.includes("/api/auth/change-password");
+  }
+  const realAlerts = useMemo(
+    () =>
+      alerts.filter(
+        (alert) =>
+          alert.type !== "BLACKLISTED_IP_ACCESS"
+          && !alert?.details?.isTestIp
+          && !isTimelineOnlyManagementEvent(alert.endpoint)
+      ),
+    [alerts]
+  );
+  const testAlerts = useMemo(
+    () =>
+      alerts.filter(
+        (alert) =>
+          alert.type !== "BLACKLISTED_IP_ACCESS"
+          && Boolean(alert?.details?.isTestIp)
+          && !isTimelineOnlyManagementEvent(alert.endpoint)
+      ),
     [alerts]
   );
   const attackPatterns = useMemo(() => {
-    const merged = new Map();
-    for (const pattern of summary.topAttackPatterns || []) {
-      const label = normalizeEventName(pattern.pattern);
-      if (label === "BLOCKED_IP_REQUEST") {
-        continue;
-      }
-      merged.set(label, (merged.get(label) || 0) + Number(pattern.count || 0));
+    const counts = new Map();
+    for (const alert of realAlerts) {
+      const label = normalizeEventName(alert.type);
+      counts.set(label, (counts.get(label) || 0) + 1);
     }
-    return [...merged.entries()]
+    return [...counts.entries()]
       .map(([pattern, count]) => ({ pattern, count }))
       .sort((a, b) => b.count - a.count || a.pattern.localeCompare(b.pattern));
-  }, [summary.topAttackPatterns]);
-  const enforcementEvents = useMemo(() => {
-    const counts = new Map();
-
-    for (const entry of timeline) {
-      const event = normalizeEventName(String(entry.event || ""));
-      if (event === "BLACKLISTED_IP_ACCESS" || event === "MANUAL_BLOCK_IP" || event === "MANUAL_UNBLOCK_IP") {
-        counts.set(event, (counts.get(event) || 0) + 1);
-      }
-      for (const action of entry.actionsTaken || []) {
-        if (action === "BLACKLISTED_IP_ACCESS" || action === "LOCKED_USER") {
-          const actionLabel = normalizeActionName(action);
-          counts.set(actionLabel, (counts.get(actionLabel) || 0) + 1);
-        }
-      }
+  }, [realAlerts]);
+  function getTimestampSecondBucket(isoTs) {
+    const dt = new Date(isoTs);
+    if (Number.isNaN(dt.getTime())) {
+      return String(isoTs || "").slice(0, 19);
     }
+    return new Date(Math.floor(dt.getTime() / 1000) * 1000).toISOString().slice(0, 19);
+  }
 
-    return [...counts.entries()]
-      .map(([event, count]) => ({ event, count }))
-      .sort((a, b) => b.count - a.count || a.event.localeCompare(b.event));
-  }, [timeline]);
-  const groupedVisibleAlerts = useMemo(() => {
-    const groups = [];
-    let current = null;
-    for (const alert of visibleAlerts) {
+  function groupAlertsByEvent(inputAlerts) {
+    const byKey = new Map();
+
+    for (const alert of inputAlerts) {
       const eventName = normalizeEventName(alert.type);
-      if (!current || current.eventName !== eventName) {
-        if (current) {
-          groups.push(current);
-        }
-        current = {
+      const ipValue = getIpDisplayInfo(alert.ip).value || "unknown";
+      const secondBucket = getTimestampSecondBucket(alert.timestamp);
+      const groupKey = `${eventName}|${ipValue}|${secondBucket}`;
+
+      if (!byKey.has(groupKey)) {
+        byKey.set(groupKey, {
           groupId: `grp-${alert.id}`,
           eventName,
-          alerts: [alert],
-        };
+          ipValue,
+          secondBucket,
+          alerts: [alert]
+        });
         continue;
       }
-      current.alerts.push(alert);
+
+      byKey.get(groupKey).alerts.push(alert);
     }
-    if (current) {
-      groups.push(current);
+
+    return [...byKey.values()].sort(
+      (a, b) => new Date(b.alerts[0]?.timestamp || 0).getTime() - new Date(a.alerts[0]?.timestamp || 0).getTime()
+    );
+  }
+
+  const groupedRealAlerts = useMemo(() => groupAlertsByEvent(realAlerts), [realAlerts]);
+  const groupedTestAlerts = useMemo(() => groupAlertsByEvent(testAlerts), [testAlerts]);
+
+  const testRiskByIp = useMemo(() => {
+    const scores = new Map();
+    for (const entry of timeline) {
+      const details = entry?.details || {};
+      if (!details.isTestIp) {
+        continue;
+      }
+      const ip = String(entry.ip || "unknown");
+      const impact = Number(entry.scoreImpact || 0);
+      scores.set(ip, (scores.get(ip) || 0) + impact);
     }
-    return groups;
-  }, [visibleAlerts]);
+    function levelFor(score) {
+      if (score >= 120) {
+        return "CRITICAL";
+      }
+      if (score >= 70) {
+        return "HIGH";
+      }
+      if (score >= 35) {
+        return "MEDIUM";
+      }
+      return "LOW";
+    }
+    return [...scores.entries()]
+      .map(([ip, score]) => ({ ip, score, riskLevel: levelFor(score) }))
+      .sort((a, b) => b.score - a.score || a.ip.localeCompare(b.ip));
+  }, [timeline]);
+
+  const testAttackPatterns = useMemo(() => {
+    const counts = new Map();
+    for (const alert of testAlerts) {
+      const event = normalizeEventName(alert.type);
+      counts.set(event, (counts.get(event) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([pattern, count]) => ({ pattern, count }))
+      .sort((a, b) => b.count - a.count || a.pattern.localeCompare(b.pattern));
+  }, [testAlerts]);
   const visibleTimeline = useMemo(() => {
-    if (showBlocklistTimelineEvents) {
-      return timeline;
-    }
+    const isAdminViewer = authState.user?.role === "admin";
     return timeline.filter((entry) => {
       const eventName = normalizeEventName(String(entry.event || ""));
+      const isTestIncident = Boolean(entry?.details?.isTestIp);
+      const rawEvent = String(entry.event || "");
+      const isAdminOnlyTimelineEvent = rawEvent === "ADMIN_DELETE_USER" || rawEvent === "ADMIN_RESET_USER_PASS";
+
+      // Keep explicit test list management events visible.
+      if (eventName === "TEST_IP_ADDED" || eventName === "TEST_IP_REMOVED") {
+        return true;
+      }
+
+      if (isAdminOnlyTimelineEvent && !isAdminViewer) {
+        return false;
+      }
+
+      // Hide test-traffic incidents from the primary timeline.
+      if (isTestIncident) {
+        return false;
+      }
+
+      if (showBlocklistTimelineEvents) {
+        return true;
+      }
       return eventName !== "BLOCKED_IP_REQUEST";
     });
-  }, [timeline, showBlocklistTimelineEvents]);
+  }, [timeline, showBlocklistTimelineEvents, authState.user?.role]);
 
   function formatEventTime(isoTs) {
     const dt = new Date(isoTs);
@@ -258,12 +363,21 @@ export default function App() {
     if (name === "BLACKLISTED_IP_ACCESS") {
       return "BLOCKED_IP_REQUEST";
     }
+    if (name === "ADMIN_DELETE_USER") {
+      return "Admin Delete User";
+    }
+    if (name === "ADMIN_RESET_USER_PASS") {
+      return "Admin Reset User Pass";
+    }
     return name;
   }
 
   function normalizeActionName(name) {
     if (name === "BLACKLISTED_IP_ACCESS") {
       return "AUTO_BLOCK_IP_ACCESS";
+    }
+    if (name === "TEST_IP_NO_BLOCK") {
+      return "TEST_IP_NO_BLOCK";
     }
     return name;
   }
@@ -596,6 +710,36 @@ export default function App() {
     }
   }
 
+  async function clearTestAlerts() {
+    if (!authState.accessToken) {
+      return;
+    }
+    const ids = testAlerts.map((alert) => alert.id);
+    if (!ids.length) {
+      setAlertStatus("No test alerts to clear.");
+      return;
+    }
+    setAlertStatus("Clearing test alerts...");
+    try {
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`${apiBase}/alerts/${id}`, {
+            method: "DELETE",
+            headers: { authorization: `Bearer ${authState.accessToken}` }
+          }).then((res) => {
+            if (!res.ok) {
+              throw new Error(`Unable to delete alert ${id}`);
+            }
+          })
+        )
+      );
+      setAlerts((prev) => prev.filter((alert) => !alert?.details?.isTestIp));
+      setAlertStatus("Test alerts cleared.");
+    } catch (error) {
+      setAlertStatus(`Clear test alerts failed: ${error.message}`);
+    }
+  }
+
   async function addBlockedIp() {
     const ip = blockIpInput.trim();
     if (!ip) {
@@ -624,6 +768,35 @@ export default function App() {
     }
   }
 
+  async function addTestIp() {
+    const ip = testIpInput.trim();
+    if (!ip) {
+      setBlockStatus("Enter a test IP first.");
+      return;
+    }
+    setBlockStatus("Adding test IP...");
+    try {
+      const response = await fetch(`${apiBase}/test-ips`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${authState.accessToken}`
+        },
+        body: JSON.stringify({ ip, source: "dashboard" })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.detail || "Unable to add test IP");
+      }
+      setTestIps((prev) => (prev.includes(ip) ? prev : [...prev, ip].sort()));
+      setBlockedIps((prev) => prev.filter((item) => item !== ip));
+      setTestIpInput("");
+      setBlockStatus(payload.added ? `Added ${ip} to test IPs.` : `${ip} is already a test IP.`);
+    } catch (error) {
+      setBlockStatus(`Add test IP failed: ${error.message}`);
+    }
+  }
+
   async function unblockIp(ip) {
     setBlockStatus(`Unblocking ${ip}...`);
     try {
@@ -639,6 +812,24 @@ export default function App() {
       setBlockStatus(`Unblocked ${ip}.`);
     } catch (error) {
       setBlockStatus(`Unblock failed: ${error.message}`);
+    }
+  }
+
+  async function removeTestIp(ip) {
+    setBlockStatus(`Removing test IP ${ip}...`);
+    try {
+      const response = await fetch(`${apiBase}/test-ips/${encodeURIComponent(ip)}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${authState.accessToken}` }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.detail || "Unable to remove test IP");
+      }
+      setTestIps((prev) => prev.filter((item) => item !== ip));
+      setBlockStatus(`Removed ${ip} from test IPs.`);
+    } catch (error) {
+      setBlockStatus(`Remove test IP failed: ${error.message}`);
     }
   }
 
@@ -674,10 +865,6 @@ export default function App() {
     );
   }
 
-  function toggleSettingsPanel(name) {
-    setSettingsPanels((prev) => ({ ...prev, [name]: !prev[name] }));
-  }
-
   async function updateDefaultInitialPassword(event) {
     event.preventDefault();
     if (authState.user?.role !== "admin") {
@@ -706,89 +893,74 @@ export default function App() {
         <div className="item" style={{ marginTop: "0.75rem" }}>
           <div className="item-row">
             <strong>Account Overview</strong>
-            <button type="button" className="ghost-btn" onClick={() => toggleSettingsPanel("account")}>
-              {settingsPanels.account ? "Minimize" : "Maximize"}
-            </button>
           </div>
-          {settingsPanels.account ? (
-            <>
+          <>
+            <p className="small">
+              Current user: {authState.user ? `${authState.user.username} (${authState.user.role})` : "Not logged in"}
+            </p>
+            {accountProfile ? (
               <p className="small">
-                Current user: {authState.user ? `${authState.user.username} (${authState.user.role})` : "Not logged in"}
+                Account ID: {accountProfile.id} | Created: {formatEventTime(accountProfile.createdAt)}
               </p>
-              {accountProfile ? (
-                <p className="small">
-                  Account ID: {accountProfile.id} | Created: {formatEventTime(accountProfile.createdAt)}
-                </p>
-              ) : null}
-              <div className="actions">
-                <button type="button" onClick={logoutUser} disabled={!authState.accessToken}>
-                  Logout
+            ) : null}
+            <div className="actions">
+              <button type="button" onClick={logoutUser} disabled={!authState.accessToken}>
+                Logout
+              </button>
+              {isAdmin ? (
+                <button type="button" onClick={runAdminTest} disabled={!authState.accessToken}>
+                  Run Admin Check
                 </button>
-                {isAdmin ? (
-                  <button type="button" onClick={runAdminTest} disabled={!authState.accessToken}>
-                    Run Admin Check
-                  </button>
-                ) : null}
-              </div>
-            </>
-          ) : null}
+              ) : null}
+            </div>
+          </>
         </div>
         <div className="item" style={{ marginTop: "0.75rem" }}>
           <div className="item-row">
             <strong>Password Management</strong>
-            <button type="button" className="ghost-btn" onClick={() => toggleSettingsPanel("password")}>
-              {settingsPanels.password ? "Minimize" : "Maximize"}
-            </button>
           </div>
-          {settingsPanels.password ? (
-            <form onSubmit={changePassword} className="form" style={{ marginTop: "0.5rem" }}>
-              <label>
-                Current Password
-                <input
-                  type="password"
-                  value={passwordForm.currentPassword}
-                  onChange={(e) => setPasswordForm((v) => ({ ...v, currentPassword: e.target.value }))}
-                  required
-                />
-              </label>
-              <label>
-                New Password
-                <input
-                  type="password"
-                  value={passwordForm.newPassword}
-                  onChange={(e) => setPasswordForm((v) => ({ ...v, newPassword: e.target.value }))}
-                  minLength={12}
-                  required
-                />
-              </label>
-              <button type="submit" disabled={!authState.accessToken}>Update Password</button>
-            </form>
-          ) : null}
+          <form onSubmit={changePassword} className="form" style={{ marginTop: "0.5rem" }}>
+            <label>
+              Current Password
+              <input
+                type="password"
+                value={passwordForm.currentPassword}
+                onChange={(e) => setPasswordForm((v) => ({ ...v, currentPassword: e.target.value }))}
+                required
+              />
+            </label>
+            <label>
+              New Password
+              <input
+                type="password"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm((v) => ({ ...v, newPassword: e.target.value }))}
+                minLength={12}
+                required
+              />
+            </label>
+            <button type="submit" disabled={!authState.accessToken}>Update Password</button>
+          </form>
         </div>
         {isAdmin ? (
           <div className="item" style={{ marginTop: "0.75rem" }}>
             <div className="item-row">
               <strong>Admin Security Defaults</strong>
-              <button type="button" className="ghost-btn" onClick={() => toggleSettingsPanel("adminDefaults")}>
-                {settingsPanels.adminDefaults ? "Minimize" : "Maximize"}
-              </button>
             </div>
-            {settingsPanels.adminDefaults ? (
-              <form onSubmit={updateDefaultInitialPassword} className="form" style={{ marginTop: "0.5rem" }}>
-                <p className="small">Current temporary password for newly created users: <code>{adminDefaults.newUserInitialPassword || "n/a"}</code></p>
-                <label>
-                  New Temporary Password
-                  <input
-                    type="password"
-                    value={defaultsForm.newUserInitialPassword}
-                    onChange={(e) => setDefaultsForm({ newUserInitialPassword: e.target.value })}
-                    minLength={12}
-                    required
-                  />
-                </label>
-                <button type="submit" disabled={!authState.accessToken}>Update Default Password</button>
-              </form>
-            ) : null}
+            <form onSubmit={updateDefaultInitialPassword} className="form" style={{ marginTop: "0.5rem" }}>
+              <p className="small">Current temporary password for newly created users: <code>{adminDefaults.newUserInitialPassword || "n/a"}</code></p>
+              <label>
+                New Temporary Password
+                <input
+                  type="password"
+                  value={defaultsForm.newUserInitialPassword}
+                  onChange={(e) => setDefaultsForm({ newUserInitialPassword: e.target.value })}
+                  minLength={12}
+                  required
+                />
+              </label>
+              <button type="submit" disabled={!authState.accessToken}>Update Default Password</button>
+            </form>
           </div>
         ) : null}
         {!isAdmin && authState.user ? (
@@ -883,6 +1055,177 @@ export default function App() {
     );
   }
 
+  function renderTestDashboard() {
+    if (authState.user?.role !== "admin") {
+      return (
+        <section className="card">
+          <h2>Test</h2>
+          <p className="small">Admin access required.</p>
+        </section>
+      );
+    }
+
+    return (
+      <>
+        <section className="grid cards" style={{ marginTop: "1rem" }}>
+          <div className="card">
+              <div className="card-title-row">
+              <h2>Test Alerts ({groupedTestAlerts.length})</h2>
+                <div className="item-actions">
+                  <button type="button" className="danger-btn" onClick={clearTestAlerts}>
+                    Clear Alerts
+                  </button>
+                </div>
+              </div>
+              {alertStatus ? <p className="small">{alertStatus}</p> : null}
+            <div className="list">
+              {groupedTestAlerts.map((group) => (
+                <div className="item" key={group.groupId}>
+                  <div className="item-row">
+                    <div>
+                      <span className={`badge ${group.alerts[0].riskLevel}`}>{group.alerts[0].riskLevel}</span> {group.eventName}
+                    </div>
+                    <div className="item-actions">
+                      <span className="small">{group.alerts.length} occurrence{group.alerts.length === 1 ? "" : "s"}</span>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => toggleAlertGroup(group.groupId)}
+                      >
+                        {expandedAlertGroups[group.groupId] ? "Hide Group" : "Show Group"}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="small">
+                    Latest: {formatEventTime(group.alerts[0].timestamp)} | {getIpDisplayInfo(group.alerts[0].ip).version}: {getIpDisplayInfo(group.alerts[0].ip).value}
+                  </div>
+                  <div className="small">Test IP traffic.</div>
+                  {group.alerts[0]?.details?.description ? (
+                    <div className="small">Description: {group.alerts[0].details.description}</div>
+                  ) : null}
+                  {expandedAlertGroups[group.groupId] ? (
+                    <div className="list" style={{ marginTop: "0.5rem" }}>
+                      {group.alerts.map((alert) => (
+                        <div className="item" key={alert.id}>
+                          <div className="item-row">
+                            <div className="small">{formatEventTime(alert.timestamp)}</div>
+                            <div className="item-actions">
+                              <button
+                                type="button"
+                                className="ghost-btn"
+                                onClick={() => toggleAlertDetails(alert.id)}
+                              >
+                                {expandedAlerts[alert.id] ? "Hide" : "Details"}
+                              </button>
+                              <button
+                                type="button"
+                                className="alert-delete-btn"
+                                title="Delete alert"
+                                onClick={() => deleteAlertById(alert.id)}
+                              >
+                                X
+                              </button>
+                            </div>
+                          </div>
+                          <div className="small">
+                            {getIpDisplayInfo(alert.ip).version}: {getIpDisplayInfo(alert.ip).value} | user: {alert.userId}
+                          </div>
+                          <div className="small">Test IP traffic.</div>
+                          {alert?.details?.description ? (
+                            <div className="small">Description: {alert.details.description}</div>
+                          ) : null}
+                          <div className="small">
+                            Action Taken: {(alert.actionsTaken || []).length ? alert.actionsTaken.map(normalizeActionName).join(", ") : "NONE"}
+                          </div>
+                          {expandedAlerts[alert.id] ? renderAlertDetails(alert) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+              {!testAlerts.length ? (
+                <div className="item"><div className="small">No test alerts.</div></div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="card">
+            <h2>Detection Engine Alerts ({systemAlerts.length})</h2>
+            <div className="list">
+              {systemAlerts.length ? (
+                systemAlerts.map((alert) => (
+                  <div className="item" key={alert.id}>
+                    <div className="item-row">
+                      <div><span className={`badge ${alert.riskLevel || "LOW"}`}>{alert.riskLevel || "LOW"}</span> {alert.type}</div>
+                    </div>
+                    <div className="small">{formatEventTime(alert.timestamp)}</div>
+                    <div className="small">
+                      {(alert.details && typeof alert.details === "object")
+                        ? Object.entries(alert.details).map(([k, v]) => `${k}=${String(v)}`).join(" | ")
+                        : "No details"}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="item"><div className="small">No detection engine alerts.</div></div>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <h2>Test Risk Scores By IP ({testRiskByIp.length})</h2>
+            <div className="list">
+              {testRiskByIp.map((entry) => (
+                <div className="item" key={entry.ip}>
+                  <div>{getIpDisplayInfo(entry.ip).version}: {getIpDisplayInfo(entry.ip).value}</div>
+                  <div className="small">score: {entry.score} <span className={`badge ${entry.riskLevel}`}>{entry.riskLevel}</span></div>
+                </div>
+              ))}
+              {!testRiskByIp.length ? (
+                <div className="item"><div className="small">No test risk entries.</div></div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="card">
+            <h2>Test IPs ({testIps.length})</h2>
+            <div className="actions">
+              <input
+                className="inline-input"
+                value={testIpInput}
+                onChange={(e) => setTestIpInput(e.target.value)}
+                placeholder="127.0.0.1 or ::1"
+              />
+              <button type="button" className="ghost-btn" onClick={addTestIp}>Add Test IP</button>
+            </div>
+            {blockStatus ? <p className="small">{blockStatus}</p> : null}
+            <div className="list">
+              {testIps.map((ip) => (
+                <div className="item item-row" key={`test-${ip}`}>
+                  <span>{getIpDisplayInfo(ip).version}: {getIpDisplayInfo(ip).value}</span>
+                  <button type="button" className="alert-delete-btn" onClick={() => removeTestIp(ip)}>Remove</button>
+                </div>
+              ))}
+              {!testIps.length ? (
+                <div className="item"><div className="small">No test IPs configured.</div></div>
+              ) : null}
+            </div>
+            <h2 style={{ marginTop: "1rem" }}>Test Attack Patterns ({testAttackPatterns.length})</h2>
+            <div className="list">
+              {testAttackPatterns.map((pattern) => (
+                <div className="item" key={pattern.pattern}>{pattern.pattern} ({pattern.count})</div>
+              ))}
+              {!testAttackPatterns.length ? (
+                <div className="item"><div className="small">No test attack patterns.</div></div>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  }
+
   return (
     <div className="container">
       <div className="title-wrap">
@@ -895,12 +1238,22 @@ export default function App() {
             <button type="button" onClick={() => setPage("dashboard")} className={page === "dashboard" ? "active-tab" : ""}>
               Dashboard
             </button>
-            <button type="button" onClick={() => setPage("settings")} className={page === "settings" ? "active-tab" : ""}>
-              Settings
-            </button>
             {authState.user?.role === "admin" ? (
               <button type="button" onClick={() => setPage("users")} className={page === "users" ? "active-tab" : ""}>
                 Users
+              </button>
+            ) : null}
+            <button type="button" onClick={() => setPage("settings")} className={page === "settings" ? "active-tab" : ""}>
+              Settings
+            </button>
+            {authState.user?.role === "admin" ? <span className="tabs-spacer" /> : null}
+            {authState.user?.role === "admin" ? (
+              <button
+                type="button"
+                className={page === "test-dashboard" ? "active-tab" : ""}
+                onClick={() => setPage("test-dashboard")}
+              >
+                Test
               </button>
             ) : null}
           </div>
@@ -911,6 +1264,7 @@ export default function App() {
       {page === "auth" ? renderAuthForms() : null}
       {page === "settings" ? renderSettingsPanel() : null}
       {page === "users" ? renderUsersPanel() : null}
+      {page === "test-dashboard" ? renderTestDashboard() : null}
       {page === "dashboard" && !authState.accessToken ? (
         <section className="card">
           <h2>Authentication Required</h2>
@@ -919,26 +1273,17 @@ export default function App() {
       ) : null}
       {page !== "dashboard" || !authState.accessToken ? null : (
         <>
-      <section className="grid kpis">
-        <div className="card"><h2>{summary.activeAlerts}</h2><div className="small">Active Alerts</div></div>
-        <div className="card"><h2>{summary.applicationAlerts}</h2><div className="small">App Alerts</div></div>
-        <div className="card"><h2>{summary.engineSystemAlerts}</h2><div className="small">Engine Alerts</div></div>
-        <div className="card"><h2>{summary.blockedIps}</h2><div className="small">Blocked IPs</div></div>
-        <div className="card"><h2>{summary.lockedUsers}</h2><div className="small">Locked Users</div></div>
-        <div className="card"><h2>{summary.honeypotTriggers}</h2><div className="small">Honeypot Triggers</div></div>
-      </section>
-
       <section className="grid cards" style={{ marginTop: "1rem" }}>
         <div className="card">
           <div className="card-title-row">
-            <h2>Active Alerts</h2>
+            <h2>Active Alerts ({groupedRealAlerts.length})</h2>
             <div className="item-actions">
               <button type="button" className="danger-btn" onClick={clearAllAlerts}>Clear Alerts</button>
             </div>
           </div>
           {alertStatus ? <p className="small">{alertStatus}</p> : null}
           <div className="list">
-            {groupedVisibleAlerts.map((group) => (
+            {groupedRealAlerts.map((group) => (
               <div className="item" key={group.groupId}>
                 <div className="item-row">
                   <div>
@@ -958,6 +1303,9 @@ export default function App() {
                 <div className="small">
                   Latest: {formatEventTime(group.alerts[0].timestamp)} | {getIpDisplayInfo(group.alerts[0].ip).version}: {getIpDisplayInfo(group.alerts[0].ip).value}
                 </div>
+                {group.alerts[0]?.details?.description ? (
+                  <div className="small">Description: {group.alerts[0].details.description}</div>
+                ) : null}
                 {expandedAlertGroups[group.groupId] ? (
                   <div className="list" style={{ marginTop: "0.5rem" }}>
                     {group.alerts.map((alert) => (
@@ -985,6 +1333,9 @@ export default function App() {
                         <div className="small">
                           {getIpDisplayInfo(alert.ip).version}: {getIpDisplayInfo(alert.ip).value} | user: {alert.userId}
                         </div>
+                        {alert?.details?.description ? (
+                          <div className="small">Description: {alert.details.description}</div>
+                        ) : null}
                         <div className="small">
                           Action Taken: {(alert.actionsTaken || []).length ? alert.actionsTaken.map(normalizeActionName).join(", ") : "NONE"}
                         </div>
@@ -999,7 +1350,7 @@ export default function App() {
         </div>
 
         <div className="card">
-          <h2>Detection Engine Alerts</h2>
+          <h2>Detection Engine Alerts ({systemAlerts.length})</h2>
           <div className="list">
             {systemAlerts.length ? (
               systemAlerts.map((alert) => (
@@ -1022,7 +1373,7 @@ export default function App() {
         </div>
 
         <div className="card">
-          <h2>Risk Scores By IP</h2>
+          <h2>Risk Scores By IP ({risk.riskByIp.length})</h2>
           <div className="list">
             {risk.riskByIp.map((entry) => (
               <div className="item" key={entry.ip}>
@@ -1040,7 +1391,7 @@ export default function App() {
 
         <div className="card">
           <div className="card-title-row">
-            <h2>Incident Timeline</h2>
+            <h2>Incident Timeline ({visibleTimeline.length})</h2>
             <button
               type="button"
               className="ghost-btn"
@@ -1072,7 +1423,7 @@ export default function App() {
         </div>
 
         <div className="card">
-          <h2>Blocked IPs</h2>
+          <h2>Blocked IPs ({blockedIps.length})</h2>
           <div className="actions">
             <input
               className="inline-input"
@@ -1091,16 +1442,12 @@ export default function App() {
               </div>
             ))}
           </div>
-          <h2 style={{ marginTop: "1rem" }}>Attack Patterns</h2>
+        </div>
+        <div className="card">
+          <h2>Attack Patterns ({attackPatterns.length})</h2>
           <div className="list">
             {attackPatterns.map((pattern) => (
               <div className="item" key={pattern.pattern}>{pattern.pattern} ({pattern.count})</div>
-            ))}
-          </div>
-          <h2 style={{ marginTop: "1rem" }}>Enforcement Events</h2>
-          <div className="list">
-            {enforcementEvents.map((event) => (
-              <div className="item" key={event.event}>{event.event} ({event.count})</div>
             ))}
           </div>
         </div>

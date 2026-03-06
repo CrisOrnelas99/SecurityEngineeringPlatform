@@ -14,7 +14,8 @@ export function authenticateToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-    if (isLockedUser(decoded.sub)) {
+    const isAdmin = decoded?.role === "admin";
+    if (isLockedUser(decoded.sub) && !isAdmin) {
       writeAuditLog({
         req,
         event: "LOCKED_USER_DENY",
@@ -24,6 +25,14 @@ export function authenticateToken(req, res, next) {
       });
       res.status(423).json({ error: "Account locked" });
       return;
+    }
+    if (isLockedUser(decoded.sub) && isAdmin) {
+      writeAuditLog({
+        req,
+        event: "LOCKED_USER_BYPASS_ADMIN",
+        userId: decoded.sub,
+        success: true
+      });
     }
     req.user = decoded;
     next();

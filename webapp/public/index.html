@@ -3,72 +3,71 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Northstar CyberSec Portal</title>
+  <title>Protected Web App Security Guide</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="site-header">
     <div class="wrap nav">
-      <a class="brand" href="/">Northstar CyberSec</a>
+      <a class="brand" href="/">Protected Web App Guide</a>
       <nav class="links">
-        <a href="#services">Services</a>
-        <a href="#threat-brief">Threat Brief</a>
-        <a href="#mitre">MITRE ATT&CK</a>
-        <a href="#support">Support</a>
+        <a href="#detections" data-open-body="detectionsBody">Detections</a>
+        <a href="#libraries" data-open-body="librariesBody">Security Libraries</a>
+        <a href="#owasp" data-open-body="owaspBody">OWASP Top 10</a>
       </nav>
-      <button id="incidentBtn" class="cart-btn">Incidents Tracked (0)</button>
     </div>
   </header>
 
   <main class="wrap">
-    <section class="hero">
-      <div>
-        <p class="eyebrow">Blue Team Readiness Platform</p>
-        <h1>Northstar CyberSec client portal for simulated enterprise traffic.</h1>
-        <p class="muted">This app intentionally behaves like a normal business site so your threat detection pipeline can detect and respond to attacks in realistic web traffic.</p>
-        <a class="primary" href="#services">Explore Services</a>
-      </div>
-      <aside class="hero-card">
-        <h3>Threat Intel Search</h3>
-        <form id="searchForm" class="stack">
-          <input id="searchInput" type="text" placeholder="Search by service, threat, or ATT&CK ID..." />
-          <button type="submit">Analyze</button>
+    <section class="top-tools">
+      <aside class="quick-filter-card">
+        <h3>Quick Filter</h3>
+        <form id="searchForm" class="stack compact-form">
+          <input id="searchInput" type="text" placeholder="Search detection, library, OWASP, MITRE..." />
+          <button type="submit">Filter</button>
         </form>
-        <p id="searchMsg" class="small"></p>
       </aside>
     </section>
 
-    <section id="services">
-      <h2>Security Services</h2>
-      <div id="productGrid" class="grid"></div>
+    <section class="hero card-like">
+      <div>
+        <p class="eyebrow">Web Security Guide</p>
+        <h1>Practical detection and defense guidance for this web app.</h1>
+        <p class="muted">Built for teams getting started in cybersecurity. Review common attack paths, core controls, and response-ready checks in one place.</p>
+      </div>
     </section>
 
-    <section id="threat-brief" class="deals">
-      <h2>Daily Threat Brief</h2>
-      <p class="muted">Subscribe for defensive advisories, detection recommendations, and incident summaries.</p>
-      <form id="newsletterForm" class="row">
-        <input id="newsletterEmail" type="email" placeholder="threat-team@northstar.io" required />
-        <button type="submit">Subscribe Brief</button>
-      </form>
-      <p id="newsletterMsg" class="small"></p>
+    <section id="detections" class="card-like collapsible">
+      <button type="button" class="section-toggle" data-toggle-section aria-expanded="false" aria-controls="detectionsBody">
+        <span>Detections</span>
+        <span class="toggle-indicator">+</span>
+      </button>
+      <div id="detectionsBody" class="section-body" hidden>
+        <p class="muted">Only detections mapped to exploit paths that exist in this web app/threat detector implementation.</p>
+        <div id="attackGrid" class="grid"></div>
+      </div>
     </section>
 
-    <section id="mitre" class="mitre card-like">
-      <h2>MITRE ATT&CK Quick Reference</h2>
-      <p class="muted">Use these common techniques to align detections, triage logic, and response playbooks.</p>
-      <div id="mitreGrid" class="grid"></div>
+    <section id="libraries" class="card-like collapsible">
+      <button type="button" class="section-toggle" data-toggle-section aria-expanded="false" aria-controls="librariesBody">
+        <span>Security Libraries</span>
+        <span class="toggle-indicator">+</span>
+      </button>
+      <div id="librariesBody" class="section-body" hidden>
+        <p class="muted">Control-level explanations and how each one supports the detection/defense pipeline.</p>
+        <div id="libraryGrid" class="grid"></div>
+      </div>
     </section>
 
-    <section id="support" class="support">
-      <h2>Security Support Request</h2>
-      <p class="muted">Open an operations ticket for investigation, containment, or hardening guidance.</p>
-      <form id="supportForm" class="stack">
-        <input id="supportName" type="text" placeholder="Analyst Name" required />
-        <input id="supportEmail" type="email" placeholder="analyst@northstar.io" required />
-        <textarea id="supportBody" rows="4" placeholder="Incident details, IOC, timeline, impacted systems"></textarea>
-        <button type="submit">Submit Ticket</button>
-      </form>
-      <p id="supportMsg" class="small"></p>
+    <section id="owasp" class="card-like collapsible">
+      <button type="button" class="section-toggle" data-toggle-section aria-expanded="false" aria-controls="owaspBody">
+        <span>OWASP Top 10</span>
+        <span class="toggle-indicator">+</span>
+      </button>
+      <div id="owaspBody" class="section-body" hidden>
+        <p class="muted">Reference list with concise mapping to current controls in this project.</p>
+        <div id="owaspGrid" class="grid"></div>
+      </div>
     </section>
   </main>
 

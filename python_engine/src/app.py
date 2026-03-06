@@ -29,6 +29,10 @@ class BlockIpRequest(BaseModel):
     ip: str
     source: str = "dashboard"
 
+class TestIpRequest(BaseModel):
+    ip: str
+    source: str = "dashboard"
+
 
 def _get_allowed_roles() -> set[str]:
     raw = os.getenv("TDR_ALLOWED_ROLES", "admin,analyst")
@@ -53,6 +57,13 @@ def require_tdr_user(authorization: str | None = Header(default=None)) -> dict:
     if role not in _get_allowed_roles():
         raise HTTPException(status_code=403, detail="Insufficient role")
 
+    return claims
+
+
+def require_tdr_admin(claims: dict = Depends(require_tdr_user)) -> dict:
+    role = str(claims.get("role") or "")
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
     return claims
 
 
@@ -116,7 +127,7 @@ def add_blocked_ip(payload: BlockIpRequest, _claims: dict = Depends(require_tdr_
     try:
         added = engine.block_ip(payload.ip, payload.source)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid IP address format")
+        raise HTTPException(status_code=400, detail="Invalid IP address format or test IP cannot be blocked")
     return {"success": True, "ip": payload.ip, "added": added}
 
 
@@ -128,6 +139,31 @@ def remove_blocked_ip(ip: str, _claims: dict = Depends(require_tdr_user)) -> dic
         raise HTTPException(status_code=400, detail="Invalid IP address format")
     if not removed:
         raise HTTPException(status_code=404, detail="IP not in blocklist")
+    return {"success": True, "ip": ip, "removed": removed}
+
+
+@app.get("/test-ips")
+def get_test_ips(_claims: dict = Depends(require_tdr_admin)) -> list[str]:
+    return engine.snapshot()["testIps"]
+
+
+@app.post("/test-ips")
+def add_test_ip(payload: TestIpRequest, _claims: dict = Depends(require_tdr_admin)) -> dict:
+    try:
+        added = engine.add_test_ip(payload.ip, payload.source)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid IP address format")
+    return {"success": True, "ip": payload.ip, "added": added}
+
+
+@app.delete("/test-ips/{ip}")
+def remove_test_ip(ip: str, _claims: dict = Depends(require_tdr_admin)) -> dict:
+    try:
+        removed = engine.remove_test_ip(ip, "dashboard")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid IP address format")
+    if not removed:
+        raise HTTPException(status_code=404, detail="IP not in test list")
     return {"success": True, "ip": ip, "removed": removed}
 
 
