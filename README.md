@@ -56,7 +56,7 @@ security_core
 
 ## Lab-Only Web App Guide
 - The web app guide is intentionally manual-test focused.
-- It shows detection scenarios and runnable commands only.
+- It includes generalized sections for detections, security features/libraries, OWASP Top 10 mapping, and a high-level architecture view.
 - Internal control mappings and implementation-location details are intentionally omitted from the UI.
 
 ## Detection Coverage (Application Alerts)

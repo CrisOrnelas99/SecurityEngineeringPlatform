@@ -12,6 +12,9 @@
       <a class="brand" href="/">Protected Web App Lab Guide</a>
       <nav class="links">
         <a href="#detections" data-open-body="detectionsBody">Detections</a>
+        <a href="#libraries" data-open-body="librariesBody">Security Features</a>
+        <a href="#owasp" data-open-body="owaspBody">OWASP Top 10</a>
+        <a href="#architecture" data-open-body="architectureBody">Architecture</a>
       </nav>
     </div>
   </header>
@@ -43,6 +46,40 @@
       <div id="detectionsBody" class="section-body" hidden>
         <p class="muted">Run each scenario manually with Windows PowerShell or Kali Linux commands.</p>
         <div id="attackGrid" class="grid"></div>
+      </div>
+    </section>
+
+    <section id="libraries" class="card-like collapsible">
+      <button type="button" class="section-toggle" data-toggle-section aria-expanded="false" aria-controls="librariesBody">
+        <span>Security Features And Libraries</span>
+        <span class="toggle-indicator">+</span>
+      </button>
+      <div id="librariesBody" class="section-body" hidden>
+        <p class="muted">High-level overview of core protections used in this project.</p>
+        <div id="libraryGrid" class="grid"></div>
+      </div>
+    </section>
+
+    <section id="owasp" class="card-like collapsible">
+      <button type="button" class="section-toggle" data-toggle-section aria-expanded="false" aria-controls="owaspBody">
+        <span>OWASP Top 10 (General Mapping)</span>
+        <span class="toggle-indicator">+</span>
+      </button>
+      <div id="owaspBody" class="section-body" hidden>
+        <p class="muted">General mapping of common OWASP risk areas to this application's protections.</p>
+        <div id="owaspGrid" class="grid"></div>
+      </div>
+    </section>
+
+    <section id="architecture" class="card-like collapsible">
+      <button type="button" class="section-toggle" data-toggle-section aria-expanded="false" aria-controls="architectureBody">
+        <span>Security Architecture Design</span>
+        <span class="toggle-indicator">+</span>
+      </button>
+      <div id="architectureBody" class="section-body" hidden>
+        <p class="muted">High-level flow of the protected app, detection engine, and dashboard response loop.</p>
+        <button id="architectureBtn" type="button">Show Architecture Diagram</button>
+        <pre id="architectureDiagram" class="code-block" style="display:none; margin-top:0.7rem;"></pre>
       </div>
     </section>
   </main>
