@@ -2,6 +2,13 @@
 
 Hands-on Threat Detection & Response + protected web app lab for practical cybersecurity engineering.
 
+## Latest Updates (2026-03-07)
+- Protected app (`:8080`) section label renamed to **Cybersecurity Lab**.
+- Detection guidance in the protected app now uses `:8080` as the trigger path for manual testing.
+- Added dashboard honeypot test route: `http://localhost:8081/internal-debug-dashboard`.
+  - Visiting this route triggers a backend honeypot event (`/internal-debug`) so `HONEYPOT_TRIGGER` appears in timeline/alerts.
+- Security Features and Libraries list was reviewed against implemented code and cleaned to remove redundant/non-relevant entries.
+
 ## Stack
 - `webapp` (Node.js/Express)
 - `waf-proxy` (Nginx + ModSecurity + OWASP CRS)
@@ -54,8 +61,8 @@ security_core
 ### Event/Data Flow
 `Client request -> WAF -> Webapp middleware/endpoint -> app log event -> python_engine correlation -> dashboard telemetry`
 
-## Lab-Only Web App Guide
-- The web app guide is intentionally manual-test focused.
+## Cybersecurity Lab Guide
+- The protected app lab is intentionally manual-test focused.
 - It includes generalized sections for detections, security features/libraries, OWASP Top 10 mapping, and a high-level architecture view.
 - Internal control mappings and implementation-location details are intentionally omitted from the UI.
 
@@ -194,6 +201,9 @@ $csrf = (Invoke-RestMethod -Method Get -Uri "$base/api/csrf-token" -WebSession $
 # Honeypot
 curl.exe -i "http://localhost:8080/internal-debug"
 
+# Optional dashboard honeypot route (triggers backend honeypot event)
+curl.exe -i "http://localhost:8081/internal-debug-dashboard"
+
 # Path traversal lab probe
 curl.exe -i "http://localhost:8080/admin-backup?path=../etc/passwd"
 
@@ -235,6 +245,9 @@ done
 # Honeypot
 curl -i "http://localhost:8080/internal-debug"
 
+# Optional dashboard honeypot route (triggers backend honeypot event)
+curl -i "http://localhost:8081/internal-debug-dashboard"
+
 # Path traversal lab probe
 curl -i "http://localhost:8080/admin-backup?path=../etc/passwd"
 
@@ -252,6 +265,7 @@ for i in $(seq 1 50); do curl -s "http://localhost:8080/api/health" >/dev/null; 
 - `FAILED_LOGIN_BURST`: 5 failed login attempts from same IP in short window.
 - `ACCOUNT_ENUMERATION`: 5+ distinct usernames with failed login attempts from one IP within 10 minutes.
 - `HONEYPOT_TRIGGER`: `curl -i http://localhost:8080/internal-debug`
+- `HONEYPOT_TRIGGER` (dashboard path option): `curl -i http://localhost:8081/internal-debug-dashboard`
 - `PATH_TRAVERSAL_ATTEMPT`: `curl -i "http://localhost:8080/admin-backup?path=../etc/passwd"`
 - `PRIV_ESC_ATTEMPT`: analyst login, then `GET /api/auth/users` with analyst token (expect `403`).
 - `EXCESSIVE_API_CALLS` / `ABNORMAL_REQUEST_FREQUENCY`: `for i in $(seq 1 50); do curl -s http://localhost:8080/api/health >/dev/null; done`
