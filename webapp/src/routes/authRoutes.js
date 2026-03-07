@@ -88,7 +88,12 @@ router.post("/register", authenticateToken, authorize("admin"), validateBody(adm
       event: "REGISTER_SUCCESS",
       success: true,
       userId: req.user?.sub || null,
-      metadata: { createdUserId: newUser.id, createdUsername: username, role }
+      metadata: {
+        createdUserId: newUser.id,
+        createdUsername: username,
+        role,
+        actorUsername: req.user?.username || null
+      }
     });
     res.status(201).json({
       id: newUser.id,
@@ -361,7 +366,11 @@ router.delete("/users/:id", authenticateToken, authorize("admin"), (req, res) =>
     event: "USER_DELETE",
     success: true,
     userId: req.user?.sub || null,
-    metadata: { deletedUserId: userId, targetUsername: targetUser.username }
+    metadata: {
+      deletedUserId: userId,
+      targetUsername: targetUser.username,
+      actorUsername: req.user?.username || null
+    }
   });
   res.json({ success: true, deletedUserId: userId });
 });

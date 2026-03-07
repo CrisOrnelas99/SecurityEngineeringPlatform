@@ -32,8 +32,11 @@ import {
 
 const apiBase = import.meta.env.VITE_TDR_API_URL || "http://localhost:8000";
 const webApiBase = import.meta.env.VITE_WEB_API_URL || "http://localhost:3000";
+const dashboardHoneypotPath = "/internal-debug-dashboard";
 
 export default function App() {
+  const isDashboardHoneypotPage = window.location.pathname === dashboardHoneypotPath;
+  const [dashboardHoneypotStatus, setDashboardHoneypotStatus] = useState("Triggering dashboard honeypot event...");
   const [authState, setAuthState] = useState(loadStoredAuthState);
   const [page, setPage] = useState(authState.accessToken ? "dashboard" : "auth");
   const [authForm, setAuthForm] = useState({
@@ -51,11 +54,11 @@ export default function App() {
   const [testIpInput, setTestIpInput] = useState("");
   const [expandedAlerts, setExpandedAlerts] = useState({});
   const [expandedTimeline, setExpandedTimeline] = useState({});
-  const [adminDefaults, setAdminDefaults] = useState({ newUserInitialPassword: "" });
+  const [, setAdminDefaults] = useState({ newUserInitialPassword: "" });
   const [defaultsForm, setDefaultsForm] = useState({ newUserInitialPassword: "" });
   const [usersStatus, setUsersStatus] = useState("");
   const [usersData, setUsersData] = useState([]);
-  const [usersLoading, setUsersLoading] = useState(false);
+  const [, setUsersLoading] = useState(false);
   const [analyticsGranularity, setAnalyticsGranularity] = useState("hourly");
   const [analyticsWindowKey, setAnalyticsWindowKey] = useState("24h");
   const [analyticsSelectedTypes, setAnalyticsSelectedTypes] = useState([]);
@@ -74,6 +77,39 @@ export default function App() {
   const [timeline, setTimeline] = useState([]);
   const [blockedIps, setBlockedIps] = useState([]);
   const [testIps, setTestIps] = useState([]);
+
+  useEffect(() => {
+    if (!isDashboardHoneypotPage) {
+      return;
+    }
+    let cancelled = false;
+    fetch(`${webApiBase}/internal-debug`, { method: "GET", credentials: "include" })
+      .then(() => {
+        if (!cancelled) {
+          setDashboardHoneypotStatus("Honeypot probe sent. Check the dashboard timeline for HONEYPOT_TRIGGER.");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDashboardHoneypotStatus("Honeypot probe attempted. Verify timeline for HONEYPOT_TRIGGER.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isDashboardHoneypotPage]);
+
+  if (isDashboardHoneypotPage) {
+    return (
+      <div className="container">
+        <section className="card">
+          <h2>Not Found</h2>
+          <p className="small">This route is a monitored dashboard honeypot endpoint.</p>
+          <p className="small">{dashboardHoneypotStatus}</p>
+        </section>
+      </div>
+    );
+  }
 
   useEffect(() => {
     persistAuthState(authState);
@@ -157,7 +193,24 @@ export default function App() {
       credentials: "include",
       headers: { authorization: `Bearer ${authState.accessToken}` }
     })
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("profile failed"))))
+      .then(async (res) => {
+        if (res.ok) {
+          return res.json();
+        }
+        const payload = await res.json().catch(() => ({}));
+        const message = String(payload?.error || "").toLowerCase();
+        const isInvalidToken = res.status === 401 || res.status === 403
+          || message.includes("invalid access token")
+          || message.includes("invalid token")
+          || message.includes("jwt");
+        if (isInvalidToken) {
+          setAuthState({ accessToken: "", refreshToken: "", user: null });
+          setAuthStatus("Session expired. Please log in again.");
+          setPage("auth");
+          return null;
+        }
+        throw new Error("profile failed");
+      })
       .then((profile) => setAccountProfile(profile))
       .catch(() => setAccountProfile(null));
   }, [authState.accessToken]);
@@ -240,7 +293,10 @@ export default function App() {
     }
   }, [analyticsWindowKey, analyticsWindowOptions]);
 
-  const analyticsEventTypes = useMemo(() => getAnalyticsEventTypes(timeline), [timeline]);
+  const analyticsEventTypes = useMemo(
+    () => getAnalyticsEventTypes(timeline, authState.user?.role),
+    [timeline, authState.user?.role]
+  );
 
   useEffect(() => {
     if (!analyticsEventTypes.length) {
@@ -263,8 +319,8 @@ export default function App() {
   );
 
   const analyticsFilteredEvents = useMemo(
-    () => filterAnalyticsEvents(timeline, analyticsSelectedTypes, analyticsRangeMs),
-    [timeline, analyticsSelectedTypes, analyticsRangeMs]
+    () => filterAnalyticsEvents(timeline, analyticsSelectedTypes, analyticsRangeMs, authState.user?.role),
+    [timeline, analyticsSelectedTypes, analyticsRangeMs, authState.user?.role]
   );
 
   const analyticsBucketRows = useMemo(
@@ -283,7 +339,6 @@ export default function App() {
     fetchUsers,
     resetUserPassword,
     deleteUser,
-    runAdminTest,
     logoutUser,
     changePassword,
     clearAllAlerts,
@@ -294,7 +349,6 @@ export default function App() {
     unblockIp,
     removeTestIp,
     updateDefaultInitialPassword,
-    downloadAnalyticsCsv,
     printAnalytics
   } = useDashboardActions({
     apiBase,
@@ -416,14 +470,14 @@ export default function App() {
             <button type="button" onClick={() => setPage("dashboard")} className={page === "dashboard" ? "active-tab" : ""}>
               Dashboard
             </button>
+            <button type="button" onClick={() => setPage("analytics")} className={page === "analytics" ? "active-tab" : ""}>
+              Analytics
+            </button>
             {authState.user?.role === "admin" ? (
               <button type="button" onClick={() => setPage("users")} className={page === "users" ? "active-tab" : ""}>
                 Users
               </button>
             ) : null}
-            <button type="button" onClick={() => setPage("analytics")} className={page === "analytics" ? "active-tab" : ""}>
-              Analytics
-            </button>
             <button type="button" onClick={() => setPage("settings")} className={page === "settings" ? "active-tab" : ""}>
               Settings
             </button>
@@ -441,12 +495,10 @@ export default function App() {
           accountProfile={accountProfile}
           formatEventTime={formatEventTime}
           onLogout={logoutUser}
-          onRunAdminCheck={runAdminTest}
           onChangePassword={changePassword}
           passwordForm={passwordForm}
           setPasswordForm={setPasswordForm}
           onUpdateDefaultInitialPassword={updateDefaultInitialPassword}
-          adminDefaults={adminDefaults}
           defaultsForm={defaultsForm}
           setDefaultsForm={setDefaultsForm}
           settingsStatus={settingsStatus}
@@ -458,8 +510,6 @@ export default function App() {
           createUserForm={createUserForm}
           setCreateUserForm={setCreateUserForm}
           onCreateUser={createUserByAdmin}
-          onRefreshUsers={fetchUsers}
-          usersLoading={usersLoading}
           usersData={usersData}
           onResetUserPassword={resetUserPassword}
           onDeleteUser={deleteUser}
@@ -486,7 +536,6 @@ export default function App() {
           formatDetailValue={formatDetailValue}
           normalizeEventName={normalizeEventName}
           normalizeActionName={normalizeActionName}
-          onDownloadCsv={downloadAnalyticsCsv}
           onPrint={printAnalytics}
         />
       ) : null}

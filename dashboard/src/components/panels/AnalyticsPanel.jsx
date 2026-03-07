@@ -18,7 +18,6 @@ export default function AnalyticsPanel({
   formatDetailValue,
   normalizeEventName,
   normalizeActionName,
-  onDownloadCsv,
   onPrint
 }) {
   return (
@@ -27,8 +26,7 @@ export default function AnalyticsPanel({
         <div className="card-title-row">
           <h2>Alert Analytics</h2>
           <div className="item-actions">
-            <button type="button" className="ghost-btn" onClick={onDownloadCsv}>Download CSV</button>
-            <button type="button" className="ghost-btn" onClick={onPrint}>Print</button>
+            <button type="button" className="ghost-btn" onClick={onPrint}>Print/ Download</button>
           </div>
         </div>
 

@@ -25,7 +25,7 @@ services:
       - TDR_DEFAULT_ADMIN_USER=admin
       - TDR_DEFAULT_ADMIN_PASS=pass12345678
       - NEW_USER_INITIAL_PASSWORD=pass12345678
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8081}
       - CSRF_COOKIE_SECRET=${CSRF_COOKIE_SECRET:-change-csrf-secret}
       - UPLOAD_DIR=/app/uploads
       - BLOCKLIST_PATH=/app/data/blocklist.json
@@ -52,6 +52,23 @@ services:
       - ANOMALY_OUTBOUND=4
     ports:
       - "${WAF_PORT:-8080}:8080"
+    volumes:
+      - ./waf/modsecurity-override.conf:/etc/nginx/templates/modsecurity.d/modsecurity-override.conf.template:ro
+
+  waf-dashboard:
+    image: owasp/modsecurity-crs:nginx
+    depends_on:
+      - dashboard
+    environment:
+      - BACKEND=http://dashboard:5173
+      - PORT=8080
+      - SERVER_NAME=localhost
+      - MODSEC_RULE_ENGINE=On
+      - BLOCKING_PARANOIA=1
+      - ANOMALY_INBOUND=5
+      - ANOMALY_OUTBOUND=4
+    ports:
+      - "${WAF_DASHBOARD_PORT:-8081}:8080"
     volumes:
       - ./waf/modsecurity-override.conf:/etc/nginx/templates/modsecurity.d/modsecurity-override.conf.template:ro
 
@@ -94,5 +111,5 @@ services:
     environment:
       - VITE_TDR_API_URL=http://localhost:8000
       - VITE_WEB_API_URL=http://localhost:8080
-    ports:
-      - "5173:5173"
+    expose:
+      - "5173"

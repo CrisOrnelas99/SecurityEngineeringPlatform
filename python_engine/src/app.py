@@ -92,14 +92,23 @@ def get_alerts_categorized(_claims: dict = Depends(require_tdr_user)) -> dict:
 
 
 @app.delete("/alerts")
-def clear_alerts(_claims: dict = Depends(require_tdr_user)) -> dict:
-    cleared = engine.clear_alerts()
+def clear_alerts(claims: dict = Depends(require_tdr_admin)) -> dict:
+    cleared = engine.clear_alerts(
+        actor_user_id=str(claims.get("sub") or "anonymous"),
+        actor_username=str(claims.get("username") or "") or None,
+        actor_role=str(claims.get("role") or "") or None,
+    )
     return {"success": True, "cleared": cleared}
 
 
 @app.delete("/alerts/{alert_id}")
-def delete_alert(alert_id: str, _claims: dict = Depends(require_tdr_user)) -> dict:
-    deleted = engine.delete_alert(alert_id)
+def delete_alert(alert_id: str, claims: dict = Depends(require_tdr_user)) -> dict:
+    deleted = engine.delete_alert(
+        alert_id,
+        actor_user_id=str(claims.get("sub") or "anonymous"),
+        actor_username=str(claims.get("username") or "") or None,
+        actor_role=str(claims.get("role") or "") or None,
+    )
     if not deleted:
         raise HTTPException(status_code=404, detail="Alert not found")
     return {"success": True, "deletedId": alert_id}

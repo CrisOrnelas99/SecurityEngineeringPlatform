@@ -30,13 +30,16 @@ export default function MainDashboardPanel({
 }) {
   return (
     <section style={{ marginTop: "1rem" }}>
+      {isAdmin ? (
+        <div className="actions" style={{ justifyContent: "flex-end", margin: "0 0 0.6rem 0" }}>
+          <button type="button" className="danger-btn" onClick={clearAllAlerts}>Clear Alerts</button>
+        </div>
+      ) : null}
       <div className="grid cards main-dashboard-layout">
         <div className="card card-active-alerts">
         <div className="card-title-row">
           <h2>Active Alerts ({groupedRealAlerts.length})</h2>
-          <div className="item-actions">
-            <button type="button" className="danger-btn" onClick={clearAllAlerts}>Clear Alerts</button>
-          </div>
+          <div className="item-actions" />
         </div>
         {alertStatus ? <p className="small">{alertStatus}</p> : null}
         <div className="list">

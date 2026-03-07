@@ -5,14 +5,40 @@ export default function UsersPanel({
   createUserForm,
   setCreateUserForm,
   onCreateUser,
-  onRefreshUsers,
-  usersLoading,
   usersData,
   onResetUserPassword,
   onDeleteUser,
   formatEventTime,
   usersStatus
 }) {
+  const collapseDelayMs = 320;
+  const [isCreateHovered, setIsCreateHovered] = React.useState(false);
+  const createCollapseTimeoutRef = React.useRef(null);
+
+  React.useEffect(() => () => {
+    if (createCollapseTimeoutRef.current) {
+      clearTimeout(createCollapseTimeoutRef.current);
+    }
+  }, []);
+
+  function handleCreateMouseEnter() {
+    if (createCollapseTimeoutRef.current) {
+      clearTimeout(createCollapseTimeoutRef.current);
+      createCollapseTimeoutRef.current = null;
+    }
+    setIsCreateHovered(true);
+  }
+
+  function handleCreateMouseLeave() {
+    if (createCollapseTimeoutRef.current) {
+      clearTimeout(createCollapseTimeoutRef.current);
+    }
+    createCollapseTimeoutRef.current = setTimeout(() => {
+      setIsCreateHovered(false);
+      createCollapseTimeoutRef.current = null;
+    }, collapseDelayMs);
+  }
+
   if (authState.user?.role !== "admin") {
     return (
       <section className="card">
@@ -24,40 +50,6 @@ export default function UsersPanel({
   return (
     <section className="card">
       <h2>Users</h2>
-      <div className="item" style={{ marginTop: "0.75rem" }}>
-        <div className="item-row">
-          <strong>Create User</strong>
-        </div>
-        <form onSubmit={onCreateUser} className="form" style={{ marginTop: "0.5rem" }}>
-          <p className="small">Create user with temporary password, then require password change on first login.</p>
-          <label>
-            Username
-            <input
-              value={createUserForm.username}
-              onChange={(e) => setCreateUserForm((v) => ({ ...v, username: e.target.value }))}
-              placeholder="newuser1"
-              required
-            />
-          </label>
-          <label>
-            Role
-            <select
-              value={createUserForm.role}
-              onChange={(e) => setCreateUserForm((v) => ({ ...v, role: e.target.value }))}
-            >
-              <option value="analyst">user</option>
-              <option value="admin">admin</option>
-            </select>
-          </label>
-          <div className="actions">
-            <button type="submit" disabled={!authState.accessToken}>Create User</button>
-            <button type="button" className="ghost-btn" onClick={onRefreshUsers} disabled={usersLoading}>
-              {usersLoading ? "Refreshing..." : "Refresh List"}
-            </button>
-          </div>
-        </form>
-      </div>
-
       <div className="item" style={{ marginTop: "0.75rem" }}>
         <div className="item-row">
           <strong>All Users</strong>
@@ -89,6 +81,44 @@ export default function UsersPanel({
             </div>
           ))}
           {!usersData.length ? <div className="item"><div className="small">No users found.</div></div> : null}
+        </div>
+      </div>
+
+      <div
+        className="item"
+        style={{ marginTop: "0.75rem" }}
+        onMouseEnter={handleCreateMouseEnter}
+        onMouseLeave={handleCreateMouseLeave}
+      >
+        <div className="item-row hover-expand-trigger">
+          <strong>Create User</strong>
+        </div>
+        <div className={`hover-expand-content ${isCreateHovered ? "is-open" : ""}`}>
+          <form onSubmit={onCreateUser} className="form" style={{ marginTop: "0.5rem" }}>
+            <p className="small">Create user with temporary password, then require password change on first login.</p>
+            <label>
+              Username
+              <input
+                value={createUserForm.username}
+                onChange={(e) => setCreateUserForm((v) => ({ ...v, username: e.target.value }))}
+                placeholder="newuser1"
+                required
+              />
+            </label>
+            <label>
+              Role
+              <select
+                value={createUserForm.role}
+                onChange={(e) => setCreateUserForm((v) => ({ ...v, role: e.target.value }))}
+              >
+                <option value="analyst">user</option>
+                <option value="admin">admin</option>
+              </select>
+            </label>
+            <div className="actions">
+              <button type="submit" disabled={!authState.accessToken}>Create User</button>
+            </div>
+          </form>
         </div>
       </div>
       <p className="small">{usersStatus}</p>

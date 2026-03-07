@@ -351,6 +351,26 @@ class DetectionEngine:
             self._record_incident("HONEYPOT_TRIGGER", event, self.weights["HONEYPOT_TRIGGER"], {"endpoint": endpoint})
 
         # Admin management actions are timeline-only events (not active alerts).
+        if event.get("event") == "REGISTER_SUCCESS":
+            self._timeline.append(
+                {
+                    "timestamp": self._now().isoformat(),
+                    "event": "ADMIN_CREATE_USER",
+                    "ip": ip,
+                    "userId": event.get("userId") or "anonymous",
+                    "scoreImpact": 0,
+                    "cumulativeRisk": self._risk_by_ip.get(ip, 0),
+                    "actionsTaken": [],
+                    "details": {
+                        "targetUserId": metadata.get("createdUserId"),
+                        "targetUsername": metadata.get("createdUsername"),
+                        "targetRole": metadata.get("role"),
+                        "actorUsername": metadata.get("actorUsername"),
+                    },
+                }
+            )
+            self._persist_state()
+
         if event.get("event") == "USER_DELETE":
             self._timeline.append(
                 {
@@ -364,6 +384,7 @@ class DetectionEngine:
                     "details": {
                         "targetUserId": metadata.get("deletedUserId"),
                         "targetUsername": metadata.get("targetUsername"),
+                        "actorUsername": metadata.get("actorUsername"),
                     },
                 }
             )
@@ -465,12 +486,28 @@ class DetectionEngine:
         thread = threading.Thread(target=self.run_forever, daemon=True)
         thread.start()
 
-    def clear_alerts(self) -> int:
+    def clear_alerts(self, actor_user_id: str = "anonymous", actor_username: str | None = None, actor_role: str | None = None) -> int:
         with self._lock:
             cleared = len(self._alerts)
             self._alerts = []
             self._timeline = []
             self._rebuild_risk_from_timeline()
+            self._timeline.append(
+                {
+                    "timestamp": self._now().isoformat(),
+                    "event": "CLEAR_ALL_ALERTS",
+                    "ip": "unknown",
+                    "userId": actor_user_id or "anonymous",
+                    "scoreImpact": 0,
+                    "cumulativeRisk": 0,
+                    "actionsTaken": [],
+                    "details": {
+                        "clearedAlerts": cleared,
+                        "actorUsername": actor_username,
+                        "actorRole": actor_role,
+                    },
+                }
+            )
             self._persist_state()
             return cleared
 
@@ -564,7 +601,13 @@ class DetectionEngine:
             logger.info("manual_unblock ip=%s source=%s removed=true", ip, source)
             return True
 
-    def delete_alert(self, alert_id: str) -> bool:
+    def delete_alert(
+        self,
+        alert_id: str,
+        actor_user_id: str = "anonymous",
+        actor_username: str | None = None,
+        actor_role: str | None = None,
+    ) -> bool:
         with self._lock:
             target = next((a for a in self._alerts if a.get("id") == alert_id), None)
             if target is None:
@@ -582,6 +625,24 @@ class DetectionEngine:
                 )
             ]
             self._rebuild_risk_from_timeline()
+            target_ip = str(target.get("ip") or "unknown")
+            self._timeline.append(
+                {
+                    "timestamp": self._now().isoformat(),
+                    "event": "CLEAR_ALERT_EVENT",
+                    "ip": target_ip,
+                    "userId": actor_user_id or "anonymous",
+                    "scoreImpact": 0,
+                    "cumulativeRisk": self._risk_by_ip.get(target_ip, 0),
+                    "actionsTaken": [],
+                    "details": {
+                        "deletedAlertId": alert_id,
+                        "deletedAlertType": target.get("type"),
+                        "actorUsername": actor_username,
+                        "actorRole": actor_role,
+                    },
+                }
+            )
             self._persist_state()
             return True
 

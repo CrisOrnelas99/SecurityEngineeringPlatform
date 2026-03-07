@@ -97,7 +97,11 @@ export function buildVisibleTimeline(timeline, userRole) {
     const eventName = normalizeEventName(String(entry.event || ""));
     const isTestIncident = Boolean(entry?.details?.isTestIp);
     const rawEvent = String(entry.event || "");
-    const isAdminOnlyTimelineEvent = rawEvent === "ADMIN_DELETE_USER" || rawEvent === "ADMIN_RESET_USER_PASS";
+    const isAdminOnlyTimelineEvent = (
+      rawEvent === "ADMIN_CREATE_USER"
+      || rawEvent === "ADMIN_DELETE_USER"
+      || rawEvent === "ADMIN_RESET_USER_PASS"
+    );
 
     if (eventName === "TEST_IP_ADDED" || eventName === "TEST_IP_REMOVED") {
       return true;

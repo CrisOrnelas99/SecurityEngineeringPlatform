@@ -18,20 +18,40 @@ export function getAnalyticsRangeMs(granularity, windowKey) {
   return windowKey === "30d" ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
 }
 
-export function getAnalyticsEventTypes(timeline) {
+function isAdminOnlyTimelineEvent(eventName) {
+  const rawEvent = String(eventName || "");
+  return rawEvent === "ADMIN_CREATE_USER"
+    || rawEvent === "ADMIN_DELETE_USER"
+    || rawEvent === "ADMIN_RESET_USER_PASS";
+}
+
+export function getAnalyticsEventTypes(timeline, userRole) {
+  const isAdminViewer = userRole === "admin";
   return [...new Set(timeline
-    .filter((entry) => !Boolean(entry?.details?.isTestIp))
+    .filter((entry) => {
+      if (Boolean(entry?.details?.isTestIp)) {
+        return false;
+      }
+      if (!isAdminViewer && isAdminOnlyTimelineEvent(entry?.event)) {
+        return false;
+      }
+      return true;
+    })
     .map((entry) => String(entry.event || ""))
     .filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
 }
 
-export function filterAnalyticsEvents(timeline, selectedTypes, rangeMs) {
+export function filterAnalyticsEvents(timeline, selectedTypes, rangeMs, userRole) {
+  const isAdminViewer = userRole === "admin";
   const now = Date.now();
   const start = now - rangeMs;
   return timeline
     .filter((entry) => {
       if (Boolean(entry?.details?.isTestIp)) {
+        return false;
+      }
+      if (!isAdminViewer && isAdminOnlyTimelineEvent(entry?.event)) {
         return false;
       }
       const eventType = String(entry.event || "");

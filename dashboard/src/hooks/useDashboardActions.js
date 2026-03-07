@@ -100,6 +100,18 @@ export default function useDashboardActions({
       });
       const payload = await response.json().catch(() => []);
       if (!response.ok) {
+        const errorMessage = String(payload?.error || "").toLowerCase();
+        const isInvalidToken = response.status === 401
+          || response.status === 403
+          || errorMessage.includes("invalid access token")
+          || errorMessage.includes("invalid token")
+          || errorMessage.includes("jwt");
+        if (isInvalidToken) {
+          setAuthState({ accessToken: "", refreshToken: "", user: null });
+          setAuthStatus("Session expired. Please log in again.");
+          setPage("auth");
+          return;
+        }
         throw new Error(payload.error || "Unable to load users");
       }
       setUsersData(Array.isArray(payload) ? payload : []);
@@ -126,10 +138,10 @@ export default function useDashboardActions({
       );
       setCreateUserForm({ username: "", role: "analyst" });
       setSettingsStatus(
-        `User ${payload.username} created (${payload.role}). Temporary password: ${payload.temporaryPassword}`
+        `User ${payload.username} created (${payload.role}).`
       );
       setUsersStatus(
-        `User ${payload.username} created (${payload.role}). Temporary password: ${payload.temporaryPassword}`
+        `User ${payload.username} created (${payload.role}).`
       );
       await fetchUsers();
     } catch (error) {
@@ -144,12 +156,12 @@ export default function useDashboardActions({
     }
     setUsersStatus(`Resetting password for ${username}...`);
     try {
-      const payload = await postWithCsrf(
+      await postWithCsrf(
         `/api/auth/users/${encodeURIComponent(userId)}/reset-password`,
         {},
         authState.accessToken
       );
-      setUsersStatus(`Password reset for ${username}. Temporary password: ${payload.temporaryPassword}`);
+      setUsersStatus(`Password reset for ${username}.`);
       await fetchUsers();
     } catch (error) {
       setUsersStatus(`Reset failed for ${username}: ${error.message}`);
@@ -179,26 +191,6 @@ export default function useDashboardActions({
       await fetchUsers();
     } catch (error) {
       setUsersStatus(`Delete failed for ${username}: ${error.message}`);
-    }
-  }
-
-  async function runAdminTest() {
-    setSettingsStatus("Calling admin report endpoint...");
-    try {
-      const response = await fetch(`${webApiBase}/api/admin/secure-report`, {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          authorization: `Bearer ${authState.accessToken}`
-        }
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || "Request denied");
-      }
-      setSettingsStatus(`Admin report result: ${payload.report}`);
-    } catch (error) {
-      setSettingsStatus(`Admin report failed: ${error.message}`);
     }
   }
 
@@ -246,6 +238,10 @@ export default function useDashboardActions({
   }
 
   async function clearAllAlerts() {
+    if (!authState.accessToken || authState.user?.role !== "admin") {
+      setAlertStatus("Only admins can clear all alerts.");
+      return;
+    }
     setAlertStatus("Clearing alerts...");
     try {
       const response = await fetch(`${apiBase}/alerts`, {
@@ -255,9 +251,30 @@ export default function useDashboardActions({
       if (!response.ok) {
         throw new Error("Unable to clear alerts");
       }
+      const [timelineResponse, riskResponse] = await Promise.all([
+        fetch(`${apiBase}/timeline`, {
+          headers: { authorization: `Bearer ${authState.accessToken}` }
+        }),
+        fetch(`${apiBase}/risk`, {
+          headers: { authorization: `Bearer ${authState.accessToken}` }
+        })
+      ]);
+      if (timelineResponse.ok) {
+        const timelinePayload = await timelineResponse.json().catch(() => []);
+        setTimeline(Array.isArray(timelinePayload) ? timelinePayload.slice(-60).reverse() : []);
+      } else {
+        setTimeline([]);
+      }
+      if (riskResponse.ok) {
+        const riskPayload = await riskResponse.json().catch(() => ({ riskByIp: [], riskByUser: [] }));
+        setRisk({
+          riskByIp: Array.isArray(riskPayload?.riskByIp) ? riskPayload.riskByIp : [],
+          riskByUser: Array.isArray(riskPayload?.riskByUser) ? riskPayload.riskByUser : []
+        });
+      } else {
+        setRisk({ riskByIp: [], riskByUser: [] });
+      }
       setAlerts([]);
-      setTimeline([]);
-      setRisk({ riskByIp: [], riskByUser: [] });
       setSummary((prev) => ({
         ...prev,
         activeAlerts: 0,
@@ -279,6 +296,13 @@ export default function useDashboardActions({
       });
       if (!response.ok) {
         throw new Error("Unable to delete alert");
+      }
+      const timelineResponse = await fetch(`${apiBase}/timeline`, {
+        headers: { authorization: `Bearer ${authState.accessToken}` }
+      });
+      if (timelineResponse.ok) {
+        const timelinePayload = await timelineResponse.json().catch(() => []);
+        setTimeline(Array.isArray(timelinePayload) ? timelinePayload.slice(-60).reverse() : []);
       }
       setAlerts((prev) => prev.filter((a) => a.id !== alertId));
       setAlertStatus(`Deleted alert ${alertId}.`);
@@ -453,7 +477,6 @@ export default function useDashboardActions({
     fetchUsers,
     resetUserPassword,
     deleteUser,
-    runAdminTest,
     logoutUser,
     changePassword,
     clearAllAlerts,

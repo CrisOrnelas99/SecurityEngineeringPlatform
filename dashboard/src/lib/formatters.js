@@ -27,8 +27,17 @@ export function normalizeEventName(name) {
   if (name === "ADMIN_DELETE_USER") {
     return "Admin Delete User";
   }
+  if (name === "ADMIN_CREATE_USER") {
+    return "Admin Create User";
+  }
   if (name === "ADMIN_RESET_USER_PASS") {
     return "Admin Reset User Pass";
+  }
+  if (name === "CLEAR_ALERT_EVENT") {
+    return "Clear Alert Event";
+  }
+  if (name === "CLEAR_ALL_ALERTS") {
+    return "Clear All Alerts";
   }
   return name;
 }

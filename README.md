@@ -21,7 +21,7 @@ Hands-on Threat Detection & Response + protected web app lab for practical cyber
 ```text
 Browser
   |\
-  | \__ Dashboard UI (:5173)
+  | \__ Dashboard UI (:8081) [waf-dashboard]
   |      |- reads detections/risk/timeline from python_engine (:8000)
   |      \- performs app auth/admin actions via WAF (:8080)
   |
@@ -132,8 +132,8 @@ docker compose up -d --build
 
 Services:
 - Protected app (via WAF): `http://localhost:8080`
+- Dashboard (via WAF): `http://localhost:8081`
 - Threat Detection API: `http://localhost:8000`
-- Dashboard: `http://localhost:5173`
 
 ## Useful Endpoints
 
@@ -168,6 +168,7 @@ Services:
 ```powershell
 # Shared setup
 $base = "http://localhost:8080"
+# Dashboard (WAF-protected UI): http://localhost:8081
 $s = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 $csrf = (Invoke-RestMethod -Method Get -Uri "$base/api/csrf-token" -WebSession $s).csrfToken
 
@@ -216,6 +217,7 @@ curl.exe -i "$base/api/auth/users" -H ("Authorization: Bearer " + $token)
 ```bash
 # Brute force burst (failed login burst)
 BASE="http://localhost:8080"
+# Dashboard (WAF-protected UI): http://localhost:8081
 CSRF=$(curl -s -c cookies.txt "$BASE/api/csrf-token" | jq -r '.csrfToken')
 for i in $(seq 1 5); do
   curl -s -b cookies.txt -c cookies.txt -X POST "$BASE/api/auth/login" \
