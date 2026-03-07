@@ -1,65 +1,105 @@
 [
   {
-    "id": "991e0aeb6d96dd1c",
-    "timestamp": "2026-03-04T22:20:01.636736+00:00",
+    "id": "f481468c1fd5a91a",
+    "timestamp": "2026-03-06T23:27:10.735299+00:00",
     "type": "HONEYPOT_TRIGGER",
     "ip": "172.18.0.1",
     "userId": "anonymous",
     "score": 90,
     "riskLevel": "HIGH",
-    "endpoint": "/admin-backup",
-    "method": "GET",
-    "errorType": "HoneypotAccess",
-    "details": {
-      "endpoint": "/admin-backup"
-    },
-    "actionsTaken": []
-  },
-  {
-    "id": "8a864cd3cbfe87ea",
-    "timestamp": "2026-03-04T22:20:01.678991+00:00",
-    "type": "HONEYPOT_TRIGGER",
-    "ip": "172.18.0.1",
-    "userId": "anonymous",
-    "score": 90,
-    "riskLevel": "CRITICAL",
     "endpoint": "/internal-debug",
     "method": "GET",
     "errorType": "HoneypotAccess",
     "details": {
       "endpoint": "/internal-debug"
     },
-    "actionsTaken": []
+    "actionsTaken": [
+      "BLACKLISTED_IP_ACCESS"
+    ]
   },
   {
-    "id": "870e45aa250b08cf",
-    "timestamp": "2026-03-04T22:20:01.711612+00:00",
+    "id": "eb24483d18976b33",
+    "timestamp": "2026-03-06T23:27:22.163138+00:00",
+    "type": "PATH_TRAVERSAL_ATTEMPT",
+    "ip": "172.18.0.1",
+    "userId": "anonymous",
+    "score": 45,
+    "riskLevel": "CRITICAL",
+    "endpoint": "/admin-backup?path=../etc/passwd",
+    "method": "GET",
+    "errorType": "HoneypotAccess",
+    "details": {
+      "endpoint": "/admin-backup?path=../etc/passwd"
+    },
+    "actionsTaken": [
+      "BLACKLISTED_IP_ACCESS"
+    ]
+  },
+  {
+    "id": "c5e5952eae311f2d",
+    "timestamp": "2026-03-06T23:27:23.301201+00:00",
     "type": "HONEYPOT_TRIGGER",
     "ip": "172.18.0.1",
     "userId": "anonymous",
     "score": 90,
     "riskLevel": "CRITICAL",
-    "endpoint": "/admin-backup",
+    "endpoint": "/admin-backup?path=../etc/passwd",
     "method": "GET",
     "errorType": "HoneypotAccess",
     "details": {
-      "endpoint": "/admin-backup"
+      "endpoint": "/admin-backup?path=../etc/passwd"
     },
     "actionsTaken": []
   },
   {
-    "id": "e252332dd0b6cc31",
-    "timestamp": "2026-03-04T22:20:01.745771+00:00",
+    "id": "8fbab0a06e51d770",
+    "timestamp": "2026-03-06T23:27:34.822119+00:00",
+    "type": "PRIV_ESC_ATTEMPT",
+    "ip": "172.18.0.1",
+    "userId": "036c1d25-275e-4d36-8783-c1fbdc918463",
+    "score": 25,
+    "riskLevel": "CRITICAL",
+    "endpoint": "/api/auth/users",
+    "method": "GET",
+    "errorType": "RBACDenied",
+    "details": {
+      "endpoint": "/api/auth/users"
+    },
+    "actionsTaken": [
+      "BLACKLISTED_IP_ACCESS"
+    ]
+  },
+  {
+    "id": "c953dde9e8e6c59d",
+    "timestamp": "2026-03-06T23:27:49.871979+00:00",
+    "type": "PATH_TRAVERSAL_ATTEMPT",
+    "ip": "172.18.0.1",
+    "userId": "anonymous",
+    "score": 45,
+    "riskLevel": "CRITICAL",
+    "endpoint": "/admin-backup?path=../etc/passwd",
+    "method": "GET",
+    "errorType": "HoneypotAccess",
+    "details": {
+      "endpoint": "/admin-backup?path=../etc/passwd"
+    },
+    "actionsTaken": [
+      "BLACKLISTED_IP_ACCESS"
+    ]
+  },
+  {
+    "id": "ac04b2fe60552b5a",
+    "timestamp": "2026-03-06T23:27:49.905540+00:00",
     "type": "HONEYPOT_TRIGGER",
     "ip": "172.18.0.1",
     "userId": "anonymous",
     "score": 90,
     "riskLevel": "CRITICAL",
-    "endpoint": "/internal-debug",
+    "endpoint": "/admin-backup?path=../etc/passwd",
     "method": "GET",
     "errorType": "HoneypotAccess",
     "details": {
-      "endpoint": "/internal-debug"
+      "endpoint": "/admin-backup?path=../etc/passwd"
     },
     "actionsTaken": []
   }

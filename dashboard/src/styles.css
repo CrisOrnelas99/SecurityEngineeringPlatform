@@ -82,6 +82,72 @@ h2 {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
+.main-dashboard-layout {
+  grid-template-columns: minmax(420px, 1.35fr) minmax(420px, 1.35fr) minmax(300px, 0.9fr);
+  grid-template-areas:
+    "active timeline risk"
+    "active timeline blocked"
+    "active timeline patterns";
+  align-items: stretch;
+}
+
+.card-active-alerts {
+  grid-area: active;
+  min-height: 640px;
+}
+
+.card-timeline {
+  grid-area: timeline;
+  min-height: 640px;
+}
+
+.card-risk {
+  grid-area: risk;
+}
+
+.card-blocked {
+  grid-area: blocked;
+}
+
+.card-patterns {
+  grid-area: patterns;
+}
+
+.main-dashboard-layout .card-active-alerts .list,
+.main-dashboard-layout .card-timeline .list {
+  max-height: 560px;
+}
+
+.test-dashboard-layout {
+  grid-template-columns: minmax(420px, 1.35fr) minmax(300px, 0.9fr);
+  grid-template-areas:
+    "testAlerts testRisk"
+    "testAlerts testIps"
+    "testAlerts testPatterns";
+  align-items: stretch;
+}
+
+.card-test-alerts {
+  grid-area: testAlerts;
+  min-height: 640px;
+}
+
+.card-test-risk {
+  grid-area: testRisk;
+}
+
+.card-test-ips {
+  grid-area: testIps;
+}
+
+.card-test-patterns {
+  grid-area: testPatterns;
+}
+
+.test-dashboard-layout .card-test-alerts .list {
+  max-height: 560px;
+}
+
 .card {
   position: relative;
   overflow: hidden;
@@ -98,6 +164,12 @@ h2 {
 .list {
   max-height: 330px;
   overflow: auto;
+  padding-right: 0.4rem;
+  scrollbar-gutter: stable;
+}
+
+.analytics-entries {
+  overflow: visible;
 }
 
 .item {
@@ -219,6 +291,20 @@ button:disabled {
   gap: 0.35rem;
 }
 
+.analytics-bar {
+  height: 8px;
+  margin-top: 0.45rem;
+  border-radius: 999px;
+  background: rgba(143, 164, 194, 0.15);
+  border: 1px solid rgba(143, 164, 194, 0.2);
+  overflow: hidden;
+}
+
+.analytics-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(107, 160, 255, 0.85), rgba(146, 193, 255, 0.75));
+}
+
 .danger-btn {
   border-color: rgba(229, 130, 130, 0.55);
   color: #ffd1d1;
@@ -264,5 +350,106 @@ button:disabled {
 
   .tabs-spacer {
     display: none;
+  }
+
+  .main-dashboard-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "active"
+      "timeline"
+      "risk"
+      "blocked"
+      "patterns";
+  }
+
+  .card-active-alerts,
+  .card-timeline {
+    min-height: auto;
+  }
+
+  .main-dashboard-layout .card-active-alerts .list,
+  .main-dashboard-layout .card-timeline .list {
+    max-height: 420px;
+  }
+
+  .test-dashboard-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "testAlerts"
+      "testRisk"
+      "testIps"
+      "testPatterns";
+  }
+
+  .card-test-alerts {
+    min-height: auto;
+  }
+
+  .test-dashboard-layout .card-test-alerts .list {
+    max-height: 420px;
+  }
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  h1,
+  h2,
+  .small,
+  .item,
+  .item-row,
+  .badge {
+    color: #111 !important;
+    text-shadow: none !important;
+  }
+
+  .card {
+    background: #fff !important;
+    border: 1px solid #d9d9d9 !important;
+    box-shadow: none !important;
+  }
+
+  .analytics-report-card .actions,
+  .analytics-report-card .item-actions {
+    display: none !important;
+  }
+
+  .analytics-filter-card {
+    display: none !important;
+  }
+
+  .analytics-layout {
+    display: block !important;
+  }
+
+  .list {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .card {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .analytics-report-card {
+    width: 100% !important;
+    margin-top: 0 !important;
+    break-before: auto;
+    page-break-before: auto;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .container {
+    max-width: none;
+    padding: 0;
   }
 }

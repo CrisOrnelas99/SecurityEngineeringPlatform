@@ -3,17 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Protected Web App Security Guide</title>
+  <title>Protected Web App Lab Guide</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="site-header">
     <div class="wrap nav">
-      <a class="brand" href="/">Protected Web App Guide</a>
+      <a class="brand" href="/">Protected Web App Lab Guide</a>
       <nav class="links">
         <a href="#detections" data-open-body="detectionsBody">Detections</a>
-        <a href="#libraries" data-open-body="librariesBody">Security Libraries</a>
-        <a href="#owasp" data-open-body="owaspBody">OWASP Top 10</a>
       </nav>
     </div>
   </header>
@@ -23,7 +21,7 @@
       <aside class="quick-filter-card">
         <h3>Quick Filter</h3>
         <form id="searchForm" class="stack compact-form">
-          <input id="searchInput" type="text" placeholder="Search detection, library, OWASP, MITRE..." />
+          <input id="searchInput" type="text" placeholder="Search detection or command..." />
           <button type="submit">Filter</button>
         </form>
       </aside>
@@ -31,9 +29,9 @@
 
     <section class="hero card-like">
       <div>
-        <p class="eyebrow">Web Security Guide</p>
-        <h1>Practical detection and defense guidance for this web app.</h1>
-        <p class="muted">Built for teams getting started in cybersecurity. Review common attack paths, core controls, and response-ready checks in one place.</p>
+        <p class="eyebrow">Web App Lab Guide</p>
+        <h1>Manual detection testing for this project.</h1>
+        <p class="muted">This page is intentionally lab-only: use the commands shown here to trigger and validate detections manually.</p>
       </div>
     </section>
 
@@ -43,30 +41,8 @@
         <span class="toggle-indicator">+</span>
       </button>
       <div id="detectionsBody" class="section-body" hidden>
-        <p class="muted">Only detections mapped to exploit paths that exist in this web app/threat detector implementation.</p>
+        <p class="muted">Run each scenario manually with Windows PowerShell or Kali Linux commands.</p>
         <div id="attackGrid" class="grid"></div>
-      </div>
-    </section>
-
-    <section id="libraries" class="card-like collapsible">
-      <button type="button" class="section-toggle" data-toggle-section aria-expanded="false" aria-controls="librariesBody">
-        <span>Security Libraries</span>
-        <span class="toggle-indicator">+</span>
-      </button>
-      <div id="librariesBody" class="section-body" hidden>
-        <p class="muted">Control-level explanations and how each one supports the detection/defense pipeline.</p>
-        <div id="libraryGrid" class="grid"></div>
-      </div>
-    </section>
-
-    <section id="owasp" class="card-like collapsible">
-      <button type="button" class="section-toggle" data-toggle-section aria-expanded="false" aria-controls="owaspBody">
-        <span>OWASP Top 10</span>
-        <span class="toggle-indicator">+</span>
-      </button>
-      <div id="owaspBody" class="section-body" hidden>
-        <p class="muted">Reference list with concise mapping to current controls in this project.</p>
-        <div id="owaspGrid" class="grid"></div>
       </div>
     </section>
   </main>

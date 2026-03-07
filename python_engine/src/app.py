@@ -80,7 +80,7 @@ def health() -> dict[str, str]:
 @app.get("/alerts")
 def get_alerts(_claims: dict = Depends(require_tdr_user)) -> list[dict]:
     snapshot = engine.snapshot()
-    return snapshot["alerts"] + _engine_system_alerts(snapshot)
+    return snapshot["alerts"]
 
 
 @app.get("/alerts/categorized")
@@ -88,7 +88,6 @@ def get_alerts_categorized(_claims: dict = Depends(require_tdr_user)) -> dict:
     snapshot = engine.snapshot()
     return {
         "applicationAlerts": snapshot["alerts"],
-        "engineSystemAlerts": _engine_system_alerts(snapshot),
     }
 
 
@@ -170,12 +169,10 @@ def remove_test_ip(ip: str, _claims: dict = Depends(require_tdr_admin)) -> dict:
 @app.get("/summary")
 def get_summary(_claims: dict = Depends(require_tdr_user)) -> dict:
     snapshot = engine.snapshot()
-    system_alerts = _engine_system_alerts(snapshot)
     honeypot_count = len([a for a in snapshot["alerts"] if a.get("type") == "HONEYPOT_TRIGGER"])
     return {
-        "activeAlerts": len(snapshot["alerts"]) + len(system_alerts),
+        "activeAlerts": len(snapshot["alerts"]),
         "applicationAlerts": len(snapshot["alerts"]),
-        "engineSystemAlerts": len(system_alerts),
         "blockedIps": len(snapshot["blockedIps"]),
         "lockedUsers": len(snapshot["lockedUsers"]),
         "honeypotTriggers": honeypot_count,
@@ -190,50 +187,3 @@ def _top_attack_patterns(alerts: list[dict]) -> list[dict]:
         counts[alert_type] = counts.get(alert_type, 0) + 1
     ranked = sorted(counts.items(), key=lambda item: item[1], reverse=True)
     return [{"pattern": key, "count": value} for key, value in ranked[:10]]
-
-
-def _engine_system_alerts(snapshot: dict) -> list[dict]:
-    alerts: list[dict] = []
-    health = snapshot.get("health", {})
-    backlog = int(health.get("ingestBacklogBytes", 0))
-    parse_errors = int(health.get("jsonParseErrors", 0))
-
-    if backlog > 65536:
-        alerts.append(
-            {
-                "id": "engine-ingest-lag",
-                "timestamp": engine._now().isoformat(),
-                "type": "ENGINE_INGEST_LAG",
-                "source": "tdr",
-                "ip": "detection-engine",
-                "userId": "system",
-                "score": 20,
-                "riskLevel": "MEDIUM",
-                "endpoint": "log-ingest",
-                "method": "INTERNAL",
-                "errorType": "IngestLag",
-                "details": {"ingestBacklogBytes": backlog},
-                "actionsTaken": [],
-            }
-        )
-
-    if parse_errors > 0:
-        alerts.append(
-            {
-                "id": "engine-log-parse-errors",
-                "timestamp": engine._now().isoformat(),
-                "type": "ENGINE_LOG_PARSE_ERRORS",
-                "source": "tdr",
-                "ip": "detection-engine",
-                "userId": "system",
-                "score": 15,
-                "riskLevel": "LOW",
-                "endpoint": "log-ingest",
-                "method": "INTERNAL",
-                "errorType": "LogParseError",
-                "details": {"jsonParseErrors": parse_errors},
-                "actionsTaken": [],
-            }
-        )
-
-    return alerts

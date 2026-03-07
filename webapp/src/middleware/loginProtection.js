@@ -1,3 +1,5 @@
+import { isTestIp } from "./threatControls.js";
+
 const ipFailures = new Map();
 const userFailures = new Map();
 const ipLockUntil = new Map();
@@ -49,16 +51,29 @@ export function getLoginProtectionState(req, usernameRaw = "") {
   const now = Date.now();
   const ip = normalizeIp(req.ip);
   const username = String(usernameRaw || "").trim().toLowerCase();
+  if (isTestIp(ip)) {
+    return { ip, username, retryAfterMs: 0, isTestIp: true };
+  }
   const ipRetry = getRetryAfterMs(ipLockUntil, ip, now);
   const userRetry = username ? getRetryAfterMs(userLockUntil, username, now) : 0;
   const retryAfterMs = Math.max(ipRetry, userRetry);
-  return { ip, username, retryAfterMs };
+  return { ip, username, retryAfterMs, isTestIp: false };
 }
 
 export function recordLoginFailure(req, usernameRaw = "") {
   const now = Date.now();
   const ip = normalizeIp(req.ip);
   const username = String(usernameRaw || "").trim().toLowerCase();
+  if (isTestIp(ip)) {
+    return {
+      ip,
+      username,
+      ipCount: 0,
+      userCount: 0,
+      lockMs: 0,
+      isTestIp: true
+    };
+  }
 
   const ipCount = pushFailure(ipFailures, ip, now);
   const userCount = username ? pushFailure(userFailures, username, now) : 0;
@@ -71,7 +86,8 @@ export function recordLoginFailure(req, usernameRaw = "") {
     username,
     ipCount,
     userCount,
-    lockMs: Math.max(ipLockMs, userLockMs)
+    lockMs: Math.max(ipLockMs, userLockMs),
+    isTestIp: false
   };
 }
 
@@ -85,4 +101,3 @@ export function clearLoginProtection(req, usernameRaw = "") {
     userLockUntil.delete(username);
   }
 }
-

@@ -1,50 +1,157 @@
 [
   {
-    "timestamp": "2026-03-04T22:20:01.636736+00:00",
+    "timestamp": "2026-03-06T23:27:10.735299+00:00",
     "event": "HONEYPOT_TRIGGER",
     "ip": "172.18.0.1",
     "userId": "anonymous",
     "scoreImpact": 90,
     "cumulativeRisk": 90,
-    "actionsTaken": [],
-    "details": {
-      "endpoint": "/admin-backup"
-    }
-  },
-  {
-    "timestamp": "2026-03-04T22:20:01.678991+00:00",
-    "event": "HONEYPOT_TRIGGER",
-    "ip": "172.18.0.1",
-    "userId": "anonymous",
-    "scoreImpact": 90,
-    "cumulativeRisk": 180,
-    "actionsTaken": [],
+    "actionsTaken": [
+      "BLACKLISTED_IP_ACCESS"
+    ],
     "details": {
       "endpoint": "/internal-debug"
     }
   },
   {
-    "timestamp": "2026-03-04T22:20:01.711612+00:00",
-    "event": "HONEYPOT_TRIGGER",
+    "timestamp": "2026-03-06T23:27:10.735357+00:00",
+    "event": "AUTO_BLOCK_IP_ACCESS",
     "ip": "172.18.0.1",
     "userId": "anonymous",
-    "scoreImpact": 90,
-    "cumulativeRisk": 270,
+    "scoreImpact": 0,
+    "cumulativeRisk": 90,
     "actionsTaken": [],
     "details": {
-      "endpoint": "/admin-backup"
+      "reasonEvent": "HONEYPOT_TRIGGER"
     }
   },
   {
-    "timestamp": "2026-03-04T22:20:01.745771+00:00",
+    "timestamp": "2026-03-06T23:27:16.736530+00:00",
+    "event": "MANUAL_UNBLOCK_IP",
+    "ip": "172.18.0.1",
+    "userId": "system",
+    "scoreImpact": 0,
+    "cumulativeRisk": 90,
+    "source": "dashboard"
+  },
+  {
+    "timestamp": "2026-03-06T23:27:22.163138+00:00",
+    "event": "PATH_TRAVERSAL_ATTEMPT",
+    "ip": "172.18.0.1",
+    "userId": "anonymous",
+    "scoreImpact": 45,
+    "cumulativeRisk": 135,
+    "actionsTaken": [
+      "BLACKLISTED_IP_ACCESS"
+    ],
+    "details": {
+      "endpoint": "/admin-backup?path=../etc/passwd"
+    }
+  },
+  {
+    "timestamp": "2026-03-06T23:27:22.163172+00:00",
+    "event": "AUTO_BLOCK_IP_ACCESS",
+    "ip": "172.18.0.1",
+    "userId": "anonymous",
+    "scoreImpact": 0,
+    "cumulativeRisk": 135,
+    "actionsTaken": [],
+    "details": {
+      "reasonEvent": "PATH_TRAVERSAL_ATTEMPT"
+    }
+  },
+  {
+    "timestamp": "2026-03-06T23:27:23.301201+00:00",
     "event": "HONEYPOT_TRIGGER",
     "ip": "172.18.0.1",
     "userId": "anonymous",
     "scoreImpact": 90,
-    "cumulativeRisk": 360,
+    "cumulativeRisk": 225,
     "actionsTaken": [],
     "details": {
-      "endpoint": "/internal-debug"
+      "endpoint": "/admin-backup?path=../etc/passwd"
+    }
+  },
+  {
+    "timestamp": "2026-03-06T23:27:26.161095+00:00",
+    "event": "MANUAL_UNBLOCK_IP",
+    "ip": "172.18.0.1",
+    "userId": "system",
+    "scoreImpact": 0,
+    "cumulativeRisk": 225,
+    "source": "dashboard"
+  },
+  {
+    "timestamp": "2026-03-06T23:27:34.822119+00:00",
+    "event": "PRIV_ESC_ATTEMPT",
+    "ip": "172.18.0.1",
+    "userId": "036c1d25-275e-4d36-8783-c1fbdc918463",
+    "scoreImpact": 25,
+    "cumulativeRisk": 250,
+    "actionsTaken": [
+      "BLACKLISTED_IP_ACCESS"
+    ],
+    "details": {
+      "endpoint": "/api/auth/users"
+    }
+  },
+  {
+    "timestamp": "2026-03-06T23:27:34.822153+00:00",
+    "event": "AUTO_BLOCK_IP_ACCESS",
+    "ip": "172.18.0.1",
+    "userId": "036c1d25-275e-4d36-8783-c1fbdc918463",
+    "scoreImpact": 0,
+    "cumulativeRisk": 250,
+    "actionsTaken": [],
+    "details": {
+      "reasonEvent": "PRIV_ESC_ATTEMPT"
+    }
+  },
+  {
+    "timestamp": "2026-03-06T23:27:39.450382+00:00",
+    "event": "MANUAL_UNBLOCK_IP",
+    "ip": "172.18.0.1",
+    "userId": "system",
+    "scoreImpact": 0,
+    "cumulativeRisk": 250,
+    "source": "dashboard"
+  },
+  {
+    "timestamp": "2026-03-06T23:27:49.871979+00:00",
+    "event": "PATH_TRAVERSAL_ATTEMPT",
+    "ip": "172.18.0.1",
+    "userId": "anonymous",
+    "scoreImpact": 45,
+    "cumulativeRisk": 295,
+    "actionsTaken": [
+      "BLACKLISTED_IP_ACCESS"
+    ],
+    "details": {
+      "endpoint": "/admin-backup?path=../etc/passwd"
+    }
+  },
+  {
+    "timestamp": "2026-03-06T23:27:49.872009+00:00",
+    "event": "AUTO_BLOCK_IP_ACCESS",
+    "ip": "172.18.0.1",
+    "userId": "anonymous",
+    "scoreImpact": 0,
+    "cumulativeRisk": 295,
+    "actionsTaken": [],
+    "details": {
+      "reasonEvent": "PATH_TRAVERSAL_ATTEMPT"
+    }
+  },
+  {
+    "timestamp": "2026-03-06T23:27:49.905540+00:00",
+    "event": "HONEYPOT_TRIGGER",
+    "ip": "172.18.0.1",
+    "userId": "anonymous",
+    "scoreImpact": 90,
+    "cumulativeRisk": 385,
+    "actionsTaken": [],
+    "details": {
+      "endpoint": "/admin-backup?path=../etc/passwd"
     }
   }
 ]

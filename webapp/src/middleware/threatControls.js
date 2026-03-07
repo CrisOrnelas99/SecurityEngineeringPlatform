@@ -6,6 +6,7 @@ import { findUserById } from "../services/userStore.js";
 
 const blocklistPath = process.env.BLOCKLIST_PATH || path.join(process.cwd(), "data", "blocklist.json");
 const lockedUsersPath = process.env.LOCKED_USERS_PATH || path.join(process.cwd(), "data", "locked_users.json");
+const testIpsPath = process.env.TEST_IPS_PATH || path.join(process.cwd(), "logs", "test_ips.json");
 const exemptDashboardAdmin = String(process.env.TDR_DASHBOARD_EXEMPT_ADMIN_USER || "admin").trim().toLowerCase();
 const allowedDashboardOrigin = String(process.env.CORS_ORIGIN || "http://localhost:5173").trim().toLowerCase();
 
@@ -20,6 +21,13 @@ function readList(filePath) {
 function normalizeIp(ip) {
   const value = String(ip || "");
   return value.startsWith("::ffff:") ? value.slice(7) : value;
+}
+
+export function isTestIp(ip) {
+  const requestIp = normalizeIp(ip);
+  const testIps = readList(testIpsPath);
+  const normalizedTestIps = new Set(testIps.map((item) => normalizeIp(item)));
+  return normalizedTestIps.has(requestIp);
 }
 
 function isDashboardAdminExempt(req) {

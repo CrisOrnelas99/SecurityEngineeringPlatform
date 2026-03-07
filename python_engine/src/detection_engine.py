@@ -39,6 +39,8 @@ class DetectionEngine:
         self._failed_login_usernames: dict[str, deque[tuple[float, str]]] = defaultdict(deque)
         self._last_account_enum_alert_at: dict[str, float] = defaultdict(float)
         self._request_times: dict[str, deque[float]] = defaultdict(deque)
+        self._excessive_rate_active_by_ip: dict[str, bool] = defaultdict(bool)
+        self._abnormal_rate_active_by_ip: dict[str, bool] = defaultdict(bool)
         self._recent_honeypot_events: dict[tuple[str, str, str], float] = {}
         self._recent_signature_alerts: dict[tuple[str, str, str, str], float] = {}
 
@@ -408,13 +410,25 @@ class DetectionEngine:
                     excessive_threshold = 80
                     abnormal_threshold = 140
 
-                if len(req_dq) > excessive_threshold:
-                    self._record_incident("EXCESSIVE_API_CALLS", event, self.weights["EXCESSIVE_API_CALLS"], {"rpm": len(req_dq)})
+                rpm = len(req_dq)
 
-                if len(req_dq) > abnormal_threshold:
-                    self._record_incident(
-                        "ABNORMAL_REQUEST_FREQUENCY", event, self.weights["ABNORMAL_REQUEST_FREQUENCY"], {"rpm": len(req_dq)}
-                    )
+                # Emit once when traffic crosses threshold, then suppress repeats
+                # until it drops back below threshold (new burst => new alert).
+                if rpm > excessive_threshold:
+                    if not self._excessive_rate_active_by_ip[ip]:
+                        self._record_incident("EXCESSIVE_API_CALLS", event, self.weights["EXCESSIVE_API_CALLS"], {"rpm": rpm})
+                        self._excessive_rate_active_by_ip[ip] = True
+                else:
+                    self._excessive_rate_active_by_ip[ip] = False
+
+                if rpm > abnormal_threshold:
+                    if not self._abnormal_rate_active_by_ip[ip]:
+                        self._record_incident(
+                            "ABNORMAL_REQUEST_FREQUENCY", event, self.weights["ABNORMAL_REQUEST_FREQUENCY"], {"rpm": rpm}
+                        )
+                        self._abnormal_rate_active_by_ip[ip] = True
+                else:
+                    self._abnormal_rate_active_by_ip[ip] = False
 
 
     def ingest_line(self, line: str) -> None:
