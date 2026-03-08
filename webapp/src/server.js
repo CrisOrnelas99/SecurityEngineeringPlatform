@@ -11,14 +11,17 @@ import apiRoutes from "./routes/apiRoutes.js";
 import { writeAuditLog } from "./utils/logger.js";
 import { blocklistGuard } from "./middleware/threatControls.js";
 
+// Express app bootstrap and core runtime paths.
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.join(__dirname, "..", "public");
 
+// Trust upstream proxy headers (needed behind nginx/waf in docker).
 app.set("trust proxy", 1);
 
+// Core middleware stack: headers, CORS, JSON parsing, cookie signing, blocklist, static UI.
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173", credentials: true }));
 app.use(express.json({ limit: "512kb" }));
@@ -26,6 +29,7 @@ app.use(cookieParser(process.env.CSRF_COOKIE_SECRET || "default-csrf-secret"));
 app.use(blocklistGuard);
 app.use(express.static(publicDir));
 
+// Structured request-level audit log for every completed response.
 app.use((req, res, next) => {
   const started = Date.now();
   res.on("finish", () => {
@@ -49,6 +53,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// Global request rate limiting for baseline abuse control.
 const limiter = rateLimit({
   windowMs: 60 * 1000,
   max: 120,
@@ -62,6 +67,7 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
+// CSRF token issue endpoint and protected API mounting.
 const csrfProtection = csrf({ cookie: { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production" } });
 app.get("/api/csrf-token", csrfProtection, (req, res) => {
   writeAuditLog({ req, event: "CSRF_TOKEN_ISSUED", success: true });
@@ -85,6 +91,7 @@ for (const endpoint of ["/admin-backup", "/.env", "/internal-debug"]) {
   });
 }
 
+// Unified error handler with security-focused audit logging.
 app.use((err, req, res, _next) => {
   const status = err.code === "EBADCSRFTOKEN" ? 403 : 500;
   writeAuditLog({
@@ -97,6 +104,7 @@ app.use((err, req, res, _next) => {
   res.status(status).json({ error: status === 403 ? "CSRF token invalid" : "Internal server error" });
 });
 
+// Start HTTP server.
 app.listen(port, () => {
   // Startup log keeps structured format for platform observability.
   console.log(JSON.stringify({ timestamp: new Date().toISOString(), event: "WEBAPP_STARTED", port }));

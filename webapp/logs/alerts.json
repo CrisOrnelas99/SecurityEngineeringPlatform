@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": "25d6a92ddda6757a",
+    "timestamp": "2026-03-08T22:58:58.231706+00:00",
+    "type": "HONEYPOT_TRIGGER",
+    "ip": "172.18.0.1",
+    "userId": "anonymous",
+    "score": 90,
+    "riskLevel": "HIGH",
+    "endpoint": "/internal-debug",
+    "method": "GET",
+    "errorType": "HoneypotAccess",
+    "details": {
+      "endpoint": "/internal-debug"
+    },
+    "actionsTaken": [
+      "BLACKLISTED_IP_ACCESS"
+    ]
+  }
+]

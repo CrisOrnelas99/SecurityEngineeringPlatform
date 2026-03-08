@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { writeAuditLog } from "../utils/logger.js";
 import { isLockedUser } from "./threatControls.js";
 
+// Verify bearer access token and attach decoded user claims to request context.
 export function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;

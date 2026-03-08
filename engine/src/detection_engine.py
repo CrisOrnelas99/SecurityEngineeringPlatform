@@ -1,3 +1,4 @@
+# Core Python libraries for hashing IDs, JSON persistence, threading, and timing windows.
 import hashlib
 import ipaddress
 import json
@@ -11,10 +12,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote_plus
 
+# Shared engine logger used for structured operational messages.
 logger = logging.getLogger("tdr.engine")
 
 
 class DetectionEngine:
+    # Correlates webapp audit events into alerts, timeline entries, and response actions.
+    # Initialize file paths, runtime toggles, in-memory state, and scoring weights.
     def __init__(self) -> None:
         self.log_path = Path(os.getenv("WEB_LOG_PATH", "/data/app.log"))
         self.blocklist_path = Path(os.getenv("BLOCKLIST_PATH", "/data/blocklist.json"))
@@ -22,7 +26,7 @@ class DetectionEngine:
         self.locked_users_path = Path(os.getenv("LOCKED_USERS_PATH", "/data/locked_users.json"))
         self.alerts_path = Path(os.getenv("ALERTS_PATH", "/data/alerts.json"))
         self.timeline_path = Path(os.getenv("TIMELINE_PATH", "/data/timeline.json"))
-        self.load_persisted_state = self._env_bool("TDR_LOAD_PERSISTED_STATE", False)
+        self.load_persisted_state = self._env_bool("TDR_LOAD_PERSISTED_STATE", True)
         self.replay_log_on_start = self._env_bool("TDR_REPLAY_LOG_ON_START", False)
         self.auto_block_private_ips = self._env_bool("TDR_AUTO_BLOCK_PRIVATE_IPS", False)
 
@@ -48,6 +52,7 @@ class DetectionEngine:
         self._json_parse_errors = 0
         self._lock = threading.Lock()
 
+        # Score impact per detection type; used to compute cumulative risk.
         self.weights = {
             "FAILED_LOGIN_BURST": 35,
             "ACCOUNT_ENUMERATION": 30,
@@ -59,16 +64,19 @@ class DetectionEngine:
         }
 
     @staticmethod
+    # Unified UTC timestamp helper for alerts/timeline records.
     def _now() -> datetime:
         return datetime.now(tz=timezone.utc)
 
     @staticmethod
+    # Parse boolean-like env vars ("true", "1", "yes", etc.).
     def _env_bool(name: str, default: bool) -> bool:
         value = os.getenv(name)
         if value is None:
             return default
         return value.strip().lower() in {"1", "true", "yes", "on"}
 
+    # Load a JSON list from disk and auto-create the file when missing.
     def _load_json_list(self, path: Path) -> list[Any]:
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -79,10 +87,12 @@ class DetectionEngine:
         except json.JSONDecodeError:
             return []
 
+    # Persist a JSON list to disk with pretty formatting.
     def _save_json_list(self, path: Path, data: list[Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
+    # Write current engine state to all artifact files.
     def _persist_state(self) -> None:
         self._save_json_list(self.blocklist_path, sorted(self._blocked_ips))
         self._save_json_list(self.test_ips_path, sorted(self._test_ips))
@@ -90,6 +100,9 @@ class DetectionEngine:
         self._save_json_list(self.alerts_path, self._alerts[-1000:])
         self._save_json_list(self.timeline_path, self._timeline[-2000:])
 
+    # Startup state loading policy:
+    # - load persisted artifacts, or
+    # - reset to a clean lab state.
     def bootstrap_state(self) -> None:
         if self.load_persisted_state:
             self._blocked_ips = set(self._load_json_list(self.blocklist_path))
@@ -115,6 +128,7 @@ class DetectionEngine:
         self._file_position = 0 if self.replay_log_on_start else self.log_path.stat().st_size
         self._rebuild_risk_from_timeline()
 
+    # Recompute cumulative risk maps from timeline entries.
     def _rebuild_risk_from_timeline(self) -> None:
         self._risk_by_ip = defaultdict(int)
         self._risk_by_user = defaultdict(int)
@@ -128,6 +142,7 @@ class DetectionEngine:
                 self._risk_by_ip[ip] += score_impact
             self._risk_by_user[user_id] += score_impact
 
+    # Map numeric score to dashboard risk tier.
     def _risk_level(self, score: int) -> str:
         if score >= 120:
             return "CRITICAL"
@@ -138,10 +153,12 @@ class DetectionEngine:
         return "LOW"
 
     @staticmethod
+    # Normalize IPv6-mapped IPv4 notation ("::ffff:x.x.x.x") to plain IPv4.
     def _normalize_ip(ip: str) -> str:
         value = str(ip or "")
         return value[7:] if value.startswith("::ffff:") else value
 
+    # Identify local/private sources for optional auto-block tuning.
     def _is_private_or_local_ip(self, ip: str) -> bool:
         normalized = self._normalize_ip(ip)
         try:
@@ -151,6 +168,7 @@ class DetectionEngine:
         return parsed.is_private or parsed.is_loopback or parsed.is_link_local
 
     @staticmethod
+    # Decode URL-encoded content so signatures match both encoded and raw payloads.
     def _decode_for_signatures(value: str) -> str:
         # Decode URL-encoded attack payloads so signature matching catches
         # both raw and encoded forms (e.g., "union select" vs "union%20select").
@@ -162,6 +180,7 @@ class DetectionEngine:
             text = decoded
         return text.lower()
 
+    # Create one incident: update risk, append alert/timeline, run auto-response, persist.
     def _record_incident(self, event_type: str, event: dict[str, Any], score: int, details: dict[str, Any]) -> None:
         ip = event.get("ip", "unknown")
         user_id = event.get("userId") or "anonymous"
@@ -229,6 +248,9 @@ class DetectionEngine:
             alert.get("endpoint") or "n/a",
         )
 
+    # Automatic containment policy:
+    # - block source IP (except test IPs)
+    # - lock user at high cumulative risk.
     def _automated_response(self, alert: dict[str, Any]) -> list[str]:
         ip = alert["ip"]
         user_id = alert["userId"]
@@ -254,9 +276,11 @@ class DetectionEngine:
 
         return actions
 
+    # Track honeypot hits briefly so related follow-up audit line can be de-duplicated.
     def _mark_honeypot_event(self, ip: str, endpoint: str, method: str, seen_at: float) -> None:
         self._recent_honeypot_events[(ip, endpoint, method)] = seen_at
 
+    # Detect REQUEST_AUDIT emitted right after a honeypot route to avoid duplicate incidents.
     def _is_honeypot_followup_audit(self, event: dict[str, Any], now: float) -> bool:
         if event.get("event") != "REQUEST_AUDIT":
             return False
@@ -273,6 +297,7 @@ class DetectionEngine:
         # A small window avoids a duplicate BLACKLISTED_IP_ACCESS for that one hit.
         return (now - seen_at) <= 2.0
 
+    # De-duplicate rapid repeated signature alerts for same IP/method/endpoint.
     def _is_duplicate_signature_alert(self, alert_type: str, ip: str, method: str, endpoint: str, now: float) -> bool:
         key = (alert_type, ip, method, endpoint)
         seen_at = self._recent_signature_alerts.get(key)
@@ -281,6 +306,7 @@ class DetectionEngine:
         self._recent_signature_alerts[key] = now
         return False
 
+    # Main correlation pipeline for one parsed webapp log event.
     def _detect(self, event: dict[str, Any]) -> None:
         ip = event.get("ip", "unknown")
         endpoint_raw = event.get("endpoint") or ""
@@ -291,6 +317,7 @@ class DetectionEngine:
         metadata = event.get("metadata") or {}
         now = time.time()
 
+        # Keep short-lived suppression caches fresh.
         # Keep honeypot correlation cache short-lived to avoid stale suppression.
         stale_keys = [key for key, ts in self._recent_honeypot_events.items() if (now - ts) > 10.0]
         for key in stale_keys:
@@ -302,6 +329,7 @@ class DetectionEngine:
         if event.get("event") == "HONEYPOT_TRIGGER":
             self._mark_honeypot_event(ip, endpoint, method, now)
 
+        # Login failure burst + account enumeration correlation windows.
         if event.get("event") == "LOGIN_FAIL":
             dq = self._failed_logins[ip]
             dq.append(now)
@@ -329,9 +357,11 @@ class DetectionEngine:
                     )
                     self._last_account_enum_alert_at[ip] = now
 
+        # RBAC denial is treated as potential privilege escalation attempt.
         if event.get("event") == "AUTHZ_DENIED":
             self._record_incident("PRIV_ESC_ATTEMPT", event, self.weights["PRIV_ESC_ATTEMPT"], {"endpoint": endpoint})
 
+        # Path traversal signature matching across endpoint, metadata, and error context.
         # Skip immediate REQUEST_AUDIT for a just-seen honeypot hit to avoid
         # duplicate path-traversal alerts for the same request.
         is_honeypot_followup = self._is_honeypot_followup_audit(event, now)
@@ -344,12 +374,14 @@ class DetectionEngine:
         ):
             self._record_incident("PATH_TRAVERSAL_ATTEMPT", event, self.weights["PATH_TRAVERSAL_ATTEMPT"], {"endpoint": endpoint})
 
+        # Dedicated honeypot event handling (single incident per probe).
         # Count honeypot probes once, based only on the dedicated honeypot event
         # emitted by the webapp route itself. REQUEST_AUDIT lines for the same
         # request should not generate duplicate honeypot alerts.
         if event.get("event") == "HONEYPOT_TRIGGER":
             self._record_incident("HONEYPOT_TRIGGER", event, self.weights["HONEYPOT_TRIGGER"], {"endpoint": endpoint})
 
+        # Admin operations are recorded for forensics/timeline, not as active alerts.
         # Admin management actions are timeline-only events (not active alerts).
         if event.get("event") == "REGISTER_SUCCESS":
             self._timeline.append(
@@ -408,6 +440,7 @@ class DetectionEngine:
             )
             self._persist_state()
 
+        # Request volume detection from audit stream, with tuned thresholds for /api/health lab tests.
         # Request-rate detections are based on request audit events only.
         # Also ignore admin user-management endpoints to avoid noisy false positives
         # during legitimate admin operations (delete/reset/change password flows).
@@ -452,6 +485,7 @@ class DetectionEngine:
                     self._abnormal_rate_active_by_ip[ip] = False
 
 
+    # Parse one log line and feed it into detection (invalid JSON is counted, not fatal).
     def ingest_line(self, line: str) -> None:
         line = line.strip()
         if not line:
@@ -466,6 +500,7 @@ class DetectionEngine:
         with self._lock:
             self._detect(event)
 
+    # Read only new bytes from the log file since last poll and process each line.
     def process_new_logs(self) -> None:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.log_path.touch(exist_ok=True)
@@ -476,16 +511,19 @@ class DetectionEngine:
                 self.ingest_line(line)
             self._file_position = handle.tell()
 
+    # Background worker loop for continuous ingestion.
     def run_forever(self, poll_seconds: float = 1.0) -> None:
         self.bootstrap_state()
         while True:
             self.process_new_logs()
             time.sleep(poll_seconds)
 
+    # Launch background ingestion thread from API startup.
     def start_background(self) -> None:
         thread = threading.Thread(target=self.run_forever, daemon=True)
         thread.start()
 
+    # Admin action: clear active alerts and reset derived risk/timeline state.
     def clear_alerts(self, actor_user_id: str = "anonymous", actor_username: str | None = None, actor_role: str | None = None) -> int:
         with self._lock:
             cleared = len(self._alerts)
@@ -511,6 +549,7 @@ class DetectionEngine:
             self._persist_state()
             return cleared
 
+    # Admin/user action: add IP to blocklist with timeline evidence.
     def block_ip(self, ip: str, source: str = "manual") -> bool:
         ipaddress.ip_address(ip)
         with self._lock:
@@ -534,6 +573,7 @@ class DetectionEngine:
             logger.info("manual_block ip=%s source=%s added=%s", ip, source, added)
             return added
 
+    # Admin action: mark IP as test source (never auto-block, optional blocklist removal).
     def add_test_ip(self, ip: str, source: str = "dashboard") -> bool:
         ipaddress.ip_address(ip)
         with self._lock:
@@ -559,6 +599,7 @@ class DetectionEngine:
             logger.info("test_ip_add ip=%s source=%s added=%s removed_from_blocklist=%s", ip, source, added, removed_from_blocklist)
             return added
 
+    # Admin action: remove IP from test list.
     def remove_test_ip(self, ip: str, source: str = "dashboard") -> bool:
         ipaddress.ip_address(ip)
         with self._lock:
@@ -580,6 +621,7 @@ class DetectionEngine:
             logger.info("test_ip_remove ip=%s source=%s removed=true", ip, source)
             return True
 
+    # Admin/user action: remove IP from blocklist with timeline evidence.
     def unblock_ip(self, ip: str, source: str = "manual") -> bool:
         ipaddress.ip_address(ip)
         with self._lock:
@@ -601,6 +643,7 @@ class DetectionEngine:
             logger.info("manual_unblock ip=%s source=%s removed=true", ip, source)
             return True
 
+    # Delete one alert and corresponding timeline event, then rebuild risk totals.
     def delete_alert(
         self,
         alert_id: str,
@@ -646,6 +689,7 @@ class DetectionEngine:
             self._persist_state()
             return True
 
+    # Read-only snapshot used by API routes for dashboard polling.
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             try:

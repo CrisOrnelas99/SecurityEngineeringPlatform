@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
+// JSON-lines audit log destination used by the detection engine.
 const logPath = process.env.LOG_FILE || path.join(process.cwd(), "logs", "app.log");
 fs.mkdirSync(path.dirname(logPath), { recursive: true });
 
+// Write one structured audit event for security telemetry.
 export function writeAuditLog({ req, event, success, userId = null, errorType = null, metadata = {} }) {
   const entry = {
     timestamp: new Date().toISOString(),
@@ -20,6 +22,7 @@ export function writeAuditLog({ req, event, success, userId = null, errorType = 
   fs.appendFileSync(logPath, `${JSON.stringify(entry)}\n`, { encoding: "utf8" });
 }
 
+// Optional middleware helper to attach audit context onto request object.
 export function requestAudit(event, metadataBuilder = () => ({})) {
   return (req, _res, next) => {
     req.auditEvent = event;

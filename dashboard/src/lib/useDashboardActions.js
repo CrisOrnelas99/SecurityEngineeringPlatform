@@ -35,6 +35,7 @@ export default function useDashboardActions({
   setAdminDefaults,
   buildAnalyticsCsv
 }) {
+  // Fetch CSRF token from webapp before any state-changing request.
   async function getCsrfToken() {
     const response = await fetch(`${webApiBase}/api/csrf-token`, {
       method: "GET",
@@ -47,6 +48,7 @@ export default function useDashboardActions({
     return payload.csrfToken;
   }
 
+  // Helper for CSRF-protected POST requests against webapp endpoints.
   async function postWithCsrf(path, body, accessToken = "") {
     const csrfToken = await getCsrfToken();
     const response = await fetch(`${webApiBase}${path}`, {
@@ -66,6 +68,7 @@ export default function useDashboardActions({
     return payload;
   }
 
+  // Authenticate user and initialize dashboard session state.
   async function loginUser(event) {
     event.preventDefault();
     setAuthStatus("Logging in...");
@@ -87,6 +90,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Admin-only: load users list for the Users panel.
   async function fetchUsers() {
     if (!authState.accessToken || authState.user?.role !== "admin") {
       return;
@@ -123,6 +127,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Admin-only: create a new user in the protected webapp.
   async function createUserByAdmin(event) {
     event.preventDefault();
     if (authState.user?.role !== "admin") {
@@ -150,6 +155,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Admin-only: trigger reset-password workflow for a specific user.
   async function resetUserPassword(userId, username) {
     if (!authState.accessToken || authState.user?.role !== "admin") {
       return;
@@ -168,6 +174,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Admin-only: delete an existing user account.
   async function deleteUser(userId, username) {
     if (!authState.accessToken || authState.user?.role !== "admin") {
       return;
@@ -194,6 +201,7 @@ export default function useDashboardActions({
     }
   }
 
+  // End current session and clear local auth/profile state.
   async function logoutUser() {
     if (!authState.accessToken) {
       return;
@@ -210,6 +218,7 @@ export default function useDashboardActions({
     setPage("auth");
   }
 
+  // Logged-in user: change own password, then force re-login.
   async function changePassword(event) {
     event.preventDefault();
     if (!authState.accessToken) {
@@ -237,6 +246,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Admin-only: clear all active alerts and refresh risk/timeline snapshots.
   async function clearAllAlerts() {
     if (!authState.accessToken || authState.user?.role !== "admin") {
       setAlertStatus("Only admins can clear all alerts.");
@@ -288,6 +298,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Delete a single alert and refresh timeline snapshot.
   async function deleteAlertById(alertId) {
     try {
       const response = await fetch(`${apiBase}/alerts/${alertId}`, {
@@ -311,6 +322,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Bulk-delete current test alerts only.
   async function clearTestAlerts() {
     if (!authState.accessToken) {
       return;
@@ -341,6 +353,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Add one IP to manual blocklist from dashboard controls.
   async function addBlockedIp() {
     const ip = blockIpInput.trim();
     if (!ip) {
@@ -369,6 +382,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Add one IP to test list (and remove from blocklist if present).
   async function addTestIp() {
     const ip = testIpInput.trim();
     if (!ip) {
@@ -398,6 +412,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Remove one IP from blocklist.
   async function unblockIp(ip) {
     setBlockStatus(`Unblocking ${ip}...`);
     try {
@@ -416,6 +431,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Remove one IP from test list.
   async function removeTestIp(ip) {
     setBlockStatus(`Removing test IP ${ip}...`);
     try {
@@ -434,6 +450,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Admin-only: update default initial password used for new users.
   async function updateDefaultInitialPassword(event) {
     event.preventDefault();
     if (authState.user?.role !== "admin") {
@@ -454,6 +471,7 @@ export default function useDashboardActions({
     }
   }
 
+  // Download analytics table data as CSV.
   function downloadAnalyticsCsv() {
     const csv = buildAnalyticsCsv(analyticsBucketRows);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -467,10 +485,12 @@ export default function useDashboardActions({
     URL.revokeObjectURL(url);
   }
 
+  // Trigger browser print flow for analytics output.
   function printAnalytics() {
     window.print();
   }
 
+  // Expose action handlers to App.jsx.
   return {
     loginUser,
     createUserByAdmin,

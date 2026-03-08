@@ -1,3 +1,4 @@
+// Return supported time-window options for the selected chart granularity.
 export function getAnalyticsWindowOptions(granularity) {
   if (granularity === "hourly") {
     return [
@@ -11,6 +12,7 @@ export function getAnalyticsWindowOptions(granularity) {
   ];
 }
 
+// Convert selected granularity + window key into a millisecond range.
 export function getAnalyticsRangeMs(granularity, windowKey) {
   if (granularity === "hourly") {
     return windowKey === "72h" ? 72 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
@@ -18,6 +20,7 @@ export function getAnalyticsRangeMs(granularity, windowKey) {
   return windowKey === "30d" ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
 }
 
+// Internal helper: events only admins should see.
 function isAdminOnlyTimelineEvent(eventName) {
   const rawEvent = String(eventName || "");
   return rawEvent === "ADMIN_CREATE_USER"
@@ -25,6 +28,7 @@ function isAdminOnlyTimelineEvent(eventName) {
     || rawEvent === "ADMIN_RESET_USER_PASS";
 }
 
+// Build selectable event type list from visible timeline events.
 export function getAnalyticsEventTypes(timeline, userRole) {
   const isAdminViewer = userRole === "admin";
   return [...new Set(timeline
@@ -42,6 +46,7 @@ export function getAnalyticsEventTypes(timeline, userRole) {
     .sort((a, b) => a.localeCompare(b));
 }
 
+// Filter timeline events by role visibility, selected types, and selected time range.
 export function filterAnalyticsEvents(timeline, selectedTypes, rangeMs, userRole) {
   const isAdminViewer = userRole === "admin";
   const now = Date.now();
@@ -67,6 +72,7 @@ export function filterAnalyticsEvents(timeline, selectedTypes, rangeMs, userRole
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
+// Aggregate filtered events into hourly/daily buckets for analytics panels.
 export function buildAnalyticsBucketRows(events, granularity) {
   const normalizeBucket = (ms) => {
     const dt = new Date(ms);
@@ -109,6 +115,7 @@ export function buildAnalyticsBucketRows(events, granularity) {
     .sort((a, b) => Number(b.key) - Number(a.key));
 }
 
+// Export current analytics rows as CSV with one line per timeline entry.
 export function buildAnalyticsCsv(analyticsBucketRows) {
   const headers = [
     "bucket",

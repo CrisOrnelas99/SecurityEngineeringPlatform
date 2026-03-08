@@ -7,10 +7,12 @@ import { authorize } from "../middleware/rbac.js";
 import { validateBody, paymentSchema } from "../middleware/validation.js";
 import { writeAuditLog } from "../utils/logger.js";
 
+// General non-auth API routes for health, uploads, simulations, and reports.
 const router = express.Router();
 const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
 fs.mkdirSync(uploadDir, { recursive: true });
 
+// Multer storage policy with filename sanitization.
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
@@ -19,6 +21,7 @@ const storage = multer.diskStorage({
   }
 });
 
+// Upload gate with size/type restrictions.
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -32,11 +35,13 @@ const upload = multer({
   }
 });
 
+// Liveness endpoint for probes and basic platform checks.
 router.get("/health", (req, res) => {
   writeAuditLog({ req, event: "HEALTHCHECK", success: true });
   res.json({ status: "ok" });
 });
 
+// Authenticated single-file upload endpoint with audit metadata.
 router.post("/upload", authenticateToken, upload.single("file"), (req, res) => {
   writeAuditLog({
     req,
@@ -53,6 +58,7 @@ router.post("/upload", authenticateToken, upload.single("file"), (req, res) => {
   res.status(201).json({ message: "File accepted", file: req.file?.filename });
 });
 
+// Simulated payment route to exercise validation and telemetry.
 router.post("/payment/simulate", authenticateToken, authorize("admin", "analyst"), validateBody(paymentSchema), (req, res) => {
   const { amount, currency, recipient } = req.body;
   const txId = `tx_${Date.now()}`;
@@ -68,6 +74,7 @@ router.post("/payment/simulate", authenticateToken, authorize("admin", "analyst"
   res.json({ txId, status: "approved", amount, currency, recipient });
 });
 
+// Admin-only sample protected report endpoint.
 router.get("/admin/secure-report", authenticateToken, authorize("admin"), (req, res) => {
   writeAuditLog({ req, event: "REPORT_ACCESS", userId: req.user.sub, success: true });
   res.json({ report: "Security report content" });

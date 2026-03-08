@@ -1,10 +1,12 @@
 import { getIpDisplayInfo, normalizeEventName } from "./formatters.js";
 
+// Identify endpoints that should appear in timeline only (not active alert panels).
 export function isTimelineOnlyManagementEvent(endpointValue) {
   const endpoint = String(endpointValue || "").toLowerCase();
   return endpoint.includes("/api/auth/users") || endpoint.includes("/api/auth/change-password");
 }
 
+// Gate whether an alert should be rendered in active alert cards.
 export function shouldShowInAlertPanels(alert) {
   if (!alert || alert.type === "BLACKLISTED_IP_ACCESS") {
     return false;
@@ -15,6 +17,7 @@ export function shouldShowInAlertPanels(alert) {
   return !isTimelineOnlyManagementEvent(alert.endpoint);
 }
 
+// Normalize timestamps to second-level buckets for grouping nearby duplicate alerts.
 export function getTimestampSecondBucket(isoTs) {
   const dt = new Date(isoTs);
   if (Number.isNaN(dt.getTime())) {
@@ -23,6 +26,7 @@ export function getTimestampSecondBucket(isoTs) {
   return new Date(Math.floor(dt.getTime() / 1000) * 1000).toISOString().slice(0, 19);
 }
 
+// Group alerts by event + source IP + second bucket for cleaner dashboard rows.
 export function groupAlertsByEvent(inputAlerts) {
   const byKey = new Map();
 
@@ -51,6 +55,7 @@ export function groupAlertsByEvent(inputAlerts) {
   );
 }
 
+// Shared score-to-risk label mapping used by derived risk cards.
 function levelFor(score) {
   if (score >= 120) {
     return "CRITICAL";
@@ -64,6 +69,7 @@ function levelFor(score) {
   return "LOW";
 }
 
+// Build risk summary for test-IP traffic only.
 export function buildTestRiskByIp(timeline) {
   const scores = new Map();
   for (const entry of timeline) {
@@ -80,6 +86,7 @@ export function buildTestRiskByIp(timeline) {
     .sort((a, b) => b.score - a.score || a.ip.localeCompare(b.ip));
 }
 
+// Count and rank attack pattern names from alert list.
 export function buildAttackPatterns(inputAlerts) {
   const counts = new Map();
   for (const alert of inputAlerts) {
@@ -91,6 +98,7 @@ export function buildAttackPatterns(inputAlerts) {
     .sort((a, b) => b.count - a.count || a.pattern.localeCompare(b.pattern));
 }
 
+// Apply role/test-event visibility rules before timeline rendering.
 export function buildVisibleTimeline(timeline, userRole) {
   const isAdminViewer = userRole === "admin";
   return timeline.filter((entry) => {

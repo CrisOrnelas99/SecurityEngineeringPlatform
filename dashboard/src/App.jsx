@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import AuthPanel from "./components/panels/AuthPanel.jsx";
-import SettingsPanel from "./components/panels/SettingsPanel.jsx";
-import UsersPanel from "./components/panels/UsersPanel.jsx";
-import TestDashboardPanel from "./components/panels/TestDashboardPanel.jsx";
-import MainDashboardPanel from "./components/panels/MainDashboardPanel.jsx";
-import AnalyticsPanel from "./components/panels/AnalyticsPanel.jsx";
-import useDashboardActions from "./hooks/useDashboardActions.js";
+import AuthPanel from "./components/AuthPanel.jsx";
+import SettingsPanel from "./components/SettingsPanel.jsx";
+import UsersPanel from "./components/UsersPanel.jsx";
+import TestDashboardPanel from "./components/TestDashboardPanel.jsx";
+import MainDashboardPanel from "./components/MainDashboardPanel.jsx";
+import AnalyticsPanel from "./components/AnalyticsPanel.jsx";
+import useDashboardActions from "./lib/useDashboardActions.js";
 import { loadStoredAuthState, persistAuthState } from "./lib/authStorage.js";
 import {
   formatEventTime,
@@ -30,15 +30,19 @@ import {
   buildAnalyticsCsv
 } from "./lib/analytics.js";
 
+// API bases for engine telemetry and protected webapp endpoints.
 const apiBase = import.meta.env.VITE_TDR_API_URL || "http://localhost:8000";
 const webApiBase = import.meta.env.VITE_WEB_API_URL || "http://localhost:3000";
 const dashboardHoneypotPath = "/internal-debug-dashboard";
 
 export default function App() {
+  // Special route: opening this page intentionally triggers a webapp honeypot event.
   const isDashboardHoneypotPage = window.location.pathname === dashboardHoneypotPath;
   const [dashboardHoneypotStatus, setDashboardHoneypotStatus] = useState("Triggering dashboard honeypot event...");
+  // Auth/session and page-routing state.
   const [authState, setAuthState] = useState(loadStoredAuthState);
   const [page, setPage] = useState(authState.accessToken ? "dashboard" : "auth");
+  // Form/status state shared across auth/admin/settings actions.
   const [authForm, setAuthForm] = useState({
     username: "",
     password: ""
@@ -78,6 +82,7 @@ export default function App() {
   const [blockedIps, setBlockedIps] = useState([]);
   const [testIps, setTestIps] = useState([]);
 
+  // Fire honeypot probe when dashboard honeypot route is visited.
   useEffect(() => {
     if (!isDashboardHoneypotPage) {
       return;
@@ -111,16 +116,19 @@ export default function App() {
     );
   }
 
+  // Persist auth session to local storage.
   useEffect(() => {
     persistAuthState(authState);
   }, [authState]);
 
+  // If user becomes authenticated, push them to the dashboard page.
   useEffect(() => {
     if (authState.accessToken && page === "auth") {
       setPage("dashboard");
     }
   }, [authState.accessToken, page]);
 
+  // Poll engine telemetry while logged in; reset dashboard state on logout.
   useEffect(() => {
     if (!authState.accessToken) {
       setSummary({
@@ -182,6 +190,7 @@ export default function App() {
     };
   }, [authState.accessToken, authState.user?.role]);
 
+  // Fetch profile from webapp and auto-expire session on invalid token responses.
   useEffect(() => {
     if (!authState.accessToken) {
       setAccountProfile(null);
@@ -215,6 +224,7 @@ export default function App() {
       .catch(() => setAccountProfile(null));
   }, [authState.accessToken]);
 
+  // Admin-only: load current default initial password setting.
   useEffect(() => {
     if (!authState.accessToken || authState.user?.role !== "admin") {
       setAdminDefaults({ newUserInitialPassword: "" });
@@ -239,6 +249,7 @@ export default function App() {
       });
   }, [authState.accessToken, authState.user?.role]);
 
+  // Admin-only: load users table.
   useEffect(() => {
     if (!authState.accessToken || authState.user?.role !== "admin") {
       setUsersData([]);
@@ -250,6 +261,7 @@ export default function App() {
     fetchUsers();
   }, [authState.accessToken, authState.user?.role]);
 
+  // Derived dashboard views computed from raw telemetry/state.
   const topIp = useMemo(() => risk.riskByIp[0], [risk]);
   const realAlerts = useMemo(
     () =>
@@ -333,6 +345,7 @@ export default function App() {
     [analyticsFilteredEvents]
   );
 
+  // Centralized action handlers (auth, users, alerts, block/test IP, analytics actions).
   const {
     loginUser,
     createUserByAdmin,
@@ -388,6 +401,7 @@ export default function App() {
     buildAnalyticsCsv
   });
 
+  // UI expand/collapse helpers.
   function toggleAlertDetails(alertId) {
     setExpandedAlerts((prev) => ({ ...prev, [alertId]: !prev[alertId] }));
   }
@@ -413,6 +427,7 @@ export default function App() {
     setAnalyticsSelectedTypes([]);
   }
 
+  // Render one expanded alert detail block.
   function renderAlertDetails(alert) {
     const info = getIpDisplayInfo(alert.ip);
     const detailEntries = Object.entries(alert.details || {});
@@ -434,6 +449,7 @@ export default function App() {
     );
   }
 
+  // Render one expanded timeline detail block.
   function renderTimelineDetails(entry) {
     const info = getIpDisplayInfo(entry.ip);
     const detailEntries = Object.entries(entry.details || {});
@@ -458,6 +474,7 @@ export default function App() {
     );
   }
 
+  // Page shell and tab-driven panel rendering.
   return (
     <div className="container">
       <div className="title-wrap">

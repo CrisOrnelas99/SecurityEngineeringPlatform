@@ -1,5 +1,6 @@
 import { writeAuditLog } from "../utils/logger.js";
 
+// Role gate middleware factory for protected routes.
 export function authorize(...roles) {
   return (req, res, next) => {
     const userRole = req.user?.role;

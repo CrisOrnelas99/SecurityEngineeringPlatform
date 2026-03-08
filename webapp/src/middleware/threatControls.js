@@ -4,12 +4,14 @@ import jwt from "jsonwebtoken";
 import { writeAuditLog } from "../utils/logger.js";
 import { findUserById } from "../services/userStore.js";
 
+// File-backed lists maintained by engine/webapp for containment and test traffic.
 const blocklistPath = process.env.BLOCKLIST_PATH || path.join(process.cwd(), "data", "blocklist.json");
 const lockedUsersPath = process.env.LOCKED_USERS_PATH || path.join(process.cwd(), "data", "locked_users.json");
 const testIpsPath = process.env.TEST_IPS_PATH || path.join(process.cwd(), "logs", "test_ips.json");
 const exemptDashboardAdmin = String(process.env.TDR_DASHBOARD_EXEMPT_ADMIN_USER || "admin").trim().toLowerCase();
 const allowedDashboardOrigin = String(process.env.CORS_ORIGIN || "http://localhost:5173").trim().toLowerCase();
 
+// Safely read JSON array from disk with empty-list fallback.
 function readList(filePath) {
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -18,11 +20,13 @@ function readList(filePath) {
   }
 }
 
+// Normalize IPv6-mapped IPv4 addresses into standard IPv4 form.
 function normalizeIp(ip) {
   const value = String(ip || "");
   return value.startsWith("::ffff:") ? value.slice(7) : value;
 }
 
+// Determine if source IP is currently in test mode list.
 export function isTestIp(ip) {
   const requestIp = normalizeIp(ip);
   const testIps = readList(testIpsPath);
@@ -30,6 +34,7 @@ export function isTestIp(ip) {
   return normalizedTestIps.has(requestIp);
 }
 
+// Allow selected dashboard-admin recovery flows to bypass IP blocklist.
 function isDashboardAdminExempt(req) {
   const endpoint = String(req.path || "");
   const requestOrigin = String(req.headers.origin || "").trim().toLowerCase();
@@ -95,6 +100,7 @@ function isDashboardAdminExempt(req) {
   }
 }
 
+// Block requests from denylisted IPs unless explicit exempt-admin flow applies.
 export function blocklistGuard(req, res, next) {
   const blockedIps = readList(blocklistPath);
   const normalizedBlocked = new Set(blockedIps.map((ip) => normalizeIp(ip)));
@@ -119,11 +125,13 @@ export function blocklistGuard(req, res, next) {
   next();
 }
 
+// Check whether a specific user ID is marked as locked.
 export function isLockedUser(userId) {
   const locked = new Set(readList(lockedUsersPath));
   return locked.has(userId);
 }
 
+// Return current locked-user set for admin/listing use cases.
 export function getLockedUsers() {
   return new Set(readList(lockedUsersPath));
 }

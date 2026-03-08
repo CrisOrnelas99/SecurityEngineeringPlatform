@@ -1,4 +1,4 @@
-#include "token_service.h"
+#pragma once
 
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
@@ -6,10 +6,20 @@
 
 #include <ctime>
 #include <stdexcept>
+#include <string>
 #include <vector>
+#include <nlohmann/json.hpp>
 
-namespace {
-std::string base64UrlEncode(const std::string& input) {
+// Interface for creating and validating HS256 JWTs.
+class TokenService {
+public:
+  nlohmann::json signJwtHS256(const nlohmann::json& claims, const std::string& secret, long expiresInSeconds) const;
+  nlohmann::json verifyJwtHS256(const std::string& token, const std::string& secret) const;
+};
+
+namespace token_service_detail {
+// Convert raw bytes/string into JWT-safe Base64URL (no padding, URL-safe alphabet).
+inline std::string base64UrlEncode(const std::string& input) {
   if (input.empty()) {
     return "";
   }
@@ -33,7 +43,8 @@ std::string base64UrlEncode(const std::string& input) {
   return out;
 }
 
-std::string base64UrlDecode(const std::string& input) {
+// Convert JWT Base64URL back to raw JSON text/binary for parsing and verification.
+inline std::string base64UrlDecode(const std::string& input) {
   std::string working = input;
   for (char& c : working) {
     if (c == '-') c = '+';
@@ -57,7 +68,8 @@ std::string base64UrlDecode(const std::string& input) {
   return out;
 }
 
-std::string signSha256(const std::string& secret, const std::string& data) {
+// Build HMAC-SHA256 signature bytes for JWT signing input.
+inline std::string signSha256(const std::string& secret, const std::string& data) {
   unsigned char mac[EVP_MAX_MD_SIZE] = {0};
   unsigned int macLen = 0;
 
@@ -68,18 +80,19 @@ std::string signSha256(const std::string& secret, const std::string& data) {
 
   return std::string(reinterpret_cast<char*>(mac), macLen);
 }
-}
+}  // namespace token_service_detail
 
-nlohmann::json TokenService::signJwtHS256(const nlohmann::json& claims, const std::string& secret, long expiresInSeconds) const {
+// Create a signed JWT by encoding header/payload and attaching HS256 signature.
+inline nlohmann::json TokenService::signJwtHS256(const nlohmann::json& claims, const std::string& secret, long expiresInSeconds) const {
   nlohmann::json header = { {"alg", "HS256"}, {"typ", "JWT"} };
   nlohmann::json payload = claims;
   payload["iat"] = std::time(nullptr);
   payload["exp"] = std::time(nullptr) + expiresInSeconds;
 
-  const std::string encodedHeader = base64UrlEncode(header.dump());
-  const std::string encodedPayload = base64UrlEncode(payload.dump());
+  const std::string encodedHeader = token_service_detail::base64UrlEncode(header.dump());
+  const std::string encodedPayload = token_service_detail::base64UrlEncode(payload.dump());
   const std::string signingInput = encodedHeader + "." + encodedPayload;
-  const std::string signature = base64UrlEncode(signSha256(secret, signingInput));
+  const std::string signature = token_service_detail::base64UrlEncode(token_service_detail::signSha256(secret, signingInput));
 
   return {
     {"success", true},
@@ -88,7 +101,8 @@ nlohmann::json TokenService::signJwtHS256(const nlohmann::json& claims, const st
   };
 }
 
-nlohmann::json TokenService::verifyJwtHS256(const std::string& token, const std::string& secret) const {
+// Validate JWT structure, verify HS256 signature, then enforce expiration checks.
+inline nlohmann::json TokenService::verifyJwtHS256(const std::string& token, const std::string& secret) const {
   const auto firstDot = token.find('.');
   const auto secondDot = token.rfind('.');
   if (firstDot == std::string::npos || secondDot == std::string::npos || firstDot == secondDot) {
@@ -100,7 +114,7 @@ nlohmann::json TokenService::verifyJwtHS256(const std::string& token, const std:
   const std::string encodedSignature = token.substr(secondDot + 1);
 
   const std::string signingInput = encodedHeader + "." + encodedPayload;
-  const std::string expectedSignature = base64UrlEncode(signSha256(secret, signingInput));
+  const std::string expectedSignature = token_service_detail::base64UrlEncode(token_service_detail::signSha256(secret, signingInput));
 
   if (expectedSignature.size() != encodedSignature.size() ||
       CRYPTO_memcmp(expectedSignature.data(), encodedSignature.data(), expectedSignature.size()) != 0) {
@@ -108,7 +122,7 @@ nlohmann::json TokenService::verifyJwtHS256(const std::string& token, const std:
   }
 
   try {
-    const auto payload = nlohmann::json::parse(base64UrlDecode(encodedPayload));
+    const auto payload = nlohmann::json::parse(token_service_detail::base64UrlDecode(encodedPayload));
     const auto now = std::time(nullptr);
     if (payload.contains("exp") && payload["exp"].is_number_integer() && payload["exp"].get<long>() < now) {
       return { {"valid", false}, {"error", "Token expired"}, {"payload", payload} };

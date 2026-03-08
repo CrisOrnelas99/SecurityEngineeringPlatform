@@ -1,3 +1,4 @@
+// Static detection scenario catalog displayed in the Cybersecurity Lab UI.
 const detectionScenarios = [
   {
     id: "DET-01",
@@ -74,6 +75,7 @@ const detectionScenarios = [
   }
 ];
 
+// Security feature/library catalog rendered in the lab knowledge panel.
 const securityFeatures = [
   {
     name: "Helmet",
@@ -132,11 +134,32 @@ const securityFeatures = [
     inApp: "Loaded with ModSecurity and adjusted with project-specific overrides where needed."
   },
   {
-    name: "Password Hashing (scrypt via crypto core)",
-    definition: "Passwords are one-way hashed with scrypt so plaintext credentials are never stored or retrievable from data storage.",
+    name: "libsodium",
+    definition: "libsodium is a modern cryptography library with safer APIs and strong defaults.",
+    layer: "Cryptographic implementation",
+    protects: "Reduces crypto misuse risk by providing vetted, higher-level primitives.",
+    inApp: "security_core uses libsodium for password hashing and verification operations."
+  },
+  {
+    name: "OpenSSL",
+    definition: "OpenSSL is a widely used cryptographic library for hashing, MACs, ciphers, and secure comparisons.",
+    layer: "Cryptographic implementation",
+    protects: "Provides robust low-level crypto primitives used by security functions.",
+    inApp: "security_core uses OpenSSL for HMAC workflows and constant-time comparison."
+  },
+  {
+    name: "HMAC (SHA-256)",
+    definition: "HMAC combines a secret key and data to produce an integrity/authenticity tag.",
+    layer: "Data integrity and authenticity",
+    protects: "Detects tampering and validates that data came from a party holding the shared secret.",
+    inApp: "Implemented in security_core via OpenSSL HMAC APIs."
+  },
+  {
+    name: "Password Hashing (via C++ security_core)",
+    definition: "Passwords are one-way hashed so plaintext credentials are never stored or retrievable from data storage.",
     layer: "Credential protection",
     protects: "Reduces impact of credential database exposure.",
-    inApp: "User passwords are hashed/verified via the C++ security_core helper service."
+    inApp: "User passwords are hashed and verified only through the C++ security_core helper service."
   },
   {
     name: "Refresh Token Revocation",
@@ -213,7 +236,7 @@ const securityFeatures = [
     definition: "Timing-safe comparisons reduce side-channel leakage when comparing sensitive values.",
     layer: "Cryptographic hygiene",
     protects: "Mitigates timing attacks against password hash verification paths.",
-    inApp: "Password verification fallback uses timingSafeEqual for constant-time comparison behavior."
+    inApp: "security_core uses constant-time comparison behavior for cryptographic verification paths."
   },
   {
     name: "Honeypot Endpoints",
@@ -241,7 +264,7 @@ const securityFeatures = [
     definition: "Structured audit logging records consistent machine-readable events for requests, security actions, and operational changes.",
     layer: "Observability and forensics",
     protects: "Enables incident reconstruction and detection correlation.",
-    inApp: "Web app emits JSON audit events consumed by the Python detection engine."
+    inApp: "Web app emits JSON audit events consumed by the engine service."
   },
   {
     name: "Docker Service Isolation",
@@ -259,6 +282,7 @@ const securityFeatures = [
   }
 ];
 
+// OWASP Top 10 reference mapping shown in the learning section.
 const owaspTop10 = [
   { id: "A01:2021", title: "Broken Access Control", definition: "Authorization checks fail to consistently enforce who can perform which actions.", inApp: "Role checks and protected endpoint enforcement." },
   { id: "A02:2021", title: "Cryptographic Failures", definition: "Sensitive data is exposed due to weak encryption, poor key handling, or unsafe secret practices.", inApp: "Signed tokens and protected credential workflows." },
@@ -272,6 +296,7 @@ const owaspTop10 = [
   { id: "A10:2021", title: "Server-Side Request Forgery (SSRF)", definition: "Server-Side Request Forgery lets an attacker force the server to send requests on the attacker's behalf, which can expose internal services, cloud metadata, or trusted network paths that should never be reachable from outside.", inApp: "No exposed arbitrary URL-fetch feature in normal app flow." }
 ];
 
+// High-level architecture text shown in the architecture diagram panel.
 const architectureDiagram = `Security Engineering Platform Architecture
 
 External Client Layer
@@ -307,7 +332,7 @@ Security Services Layer
 Data and Artifacts Layer
   webapp/data (users, settings, token records)
   webapp/logs/app.log (security telemetry source)
-  python_engine/data (alerts, timeline, risk artifacts)
+  engine/data (alerts, timeline, risk artifacts)
 
 Operational Flows
   1) Request flow: Client -> WAF -> Web App
@@ -315,6 +340,7 @@ Operational Flows
   3) Visibility flow: Dashboard -> Detection API + protected app auth/admin endpoints
   4) Response loop: Detection outcomes -> containment actions -> timeline evidence`;
 
+// Build a generic card element used by all section renderers.
 function createCard(className, html) {
   const card = document.createElement("article");
   card.className = className;
@@ -322,6 +348,7 @@ function createCard(className, html) {
   return card;
 }
 
+// Render detection scenario cards.
 function renderDetections(items) {
   const container = document.getElementById("attackGrid");
   container.innerHTML = "";
@@ -345,6 +372,7 @@ function renderDetections(items) {
   }
 }
 
+// Render security feature/library cards.
 function renderLibraries(items) {
   const container = document.getElementById("libraryGrid");
   container.innerHTML = "";
@@ -360,6 +388,7 @@ function renderLibraries(items) {
   }
 }
 
+// Render OWASP mapping cards.
 function renderOwasp(items) {
   const container = document.getElementById("owaspGrid");
   container.innerHTML = "";
@@ -373,10 +402,12 @@ function renderOwasp(items) {
   }
 }
 
+// Normalize free-text search input for case-insensitive matching.
 function normalize(value) {
   return String(value || "").toLowerCase();
 }
 
+// Filter all sections by user search query.1
 function filterData(query) {
   if (!query) {
     return {
@@ -413,6 +444,7 @@ function filterData(query) {
   return { detections, libraries, owasp };
 }
 
+// Expand/collapse a section header and keep button state in sync.
 function toggleSection(toggleButton) {
   const controlsId = toggleButton.getAttribute("aria-controls");
   if (!controlsId) {
@@ -438,6 +470,7 @@ function toggleSection(toggleButton) {
   }
 }
 
+// Programmatically open/close a section (used by search + nav links).
 function setSectionOpen(bodyId, shouldOpen) {
   const body = document.getElementById(bodyId);
   if (!body) {
@@ -463,6 +496,7 @@ function setSectionOpen(bodyId, shouldOpen) {
   }
 }
 
+// Client-side auth/session storage key and frequently used DOM references.
 const AUTH_STORAGE_KEY = "protected_app_auth_state";
 const sessionAccessCard = document.getElementById("sessionAccessCard");
 const sessionAccessContent = document.getElementById("sessionAccessContent");
@@ -479,8 +513,10 @@ const authStatus = document.getElementById("authStatus");
 const sessionAccessCollapseDelayMs = 320;
 let sessionAccessCollapseTimer = null;
 
+// In-memory auth session model synchronized with localStorage.
 let authState = loadAuthState();
 
+// Read saved auth state from localStorage.
 function loadAuthState() {
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -498,15 +534,18 @@ function loadAuthState() {
   }
 }
 
+// Persist current auth state to localStorage.
 function saveAuthState() {
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
 }
 
+// Clear auth state and persist logged-out values.
 function clearAuthState() {
   authState = { accessToken: "", refreshToken: "", user: null };
   saveAuthState();
 }
 
+// Shared session-expiry handler used when token validation fails.
 function invalidateSession(message = "Session expired. Please log in again.") {
   clearAuthState();
   setAuthInfoText();
@@ -514,6 +553,7 @@ function invalidateSession(message = "Session expired. Please log in again.") {
   hideLockHint();
 }
 
+// Disable/enable auth buttons while requests are in flight.
 function setAuthUiLoading(isLoading) {
   if (authLoginBtn) {
     authLoginBtn.disabled = isLoading;
@@ -523,6 +563,7 @@ function setAuthUiLoading(isLoading) {
   }
 }
 
+// Role-aware lock check for protected UI sections.
 function hasRequiredAccess(lockType) {
   const user = authState?.user;
   if (!lockType || lockType === "none") {
@@ -537,6 +578,7 @@ function hasRequiredAccess(lockType) {
   return true;
 }
 
+// User-facing lock hint message based on lock requirement.
 function lockMessage(lockType) {
   if (lockType === "admin") {
     return "Admin login required";
@@ -544,6 +586,7 @@ function lockMessage(lockType) {
   return "Login required";
 }
 
+// Refresh lock styles/states on all collapsible section buttons.
 function updateSectionLocks() {
   for (const toggle of sectionToggles) {
     const lockType = String(toggle.getAttribute("data-lock") || "none");
@@ -553,6 +596,7 @@ function updateSectionLocks() {
   }
 }
 
+// Hide floating lock hint bubble.
 function hideLockHint() {
   if (!lockHint) {
     return;
@@ -561,6 +605,7 @@ function hideLockHint() {
   lockHint.hidden = true;
 }
 
+// Show floating lock hint near the clicked locked section toggle.
 function showLockHint(toggle) {
   if (!lockHint) {
     return;
@@ -582,6 +627,7 @@ function showLockHint(toggle) {
   lockHint.hidden = false;
 }
 
+// Open/close session-access card content panel.
 function setSessionAccessOpen(isOpen) {
   if (!sessionAccessContent) {
     return;
@@ -589,6 +635,7 @@ function setSessionAccessOpen(isOpen) {
   sessionAccessContent.classList.toggle("is-open", isOpen);
 }
 
+// Hover handlers for session-access expandable card.
 if (sessionAccessCard) {
   sessionAccessCard.addEventListener("mouseenter", () => {
     if (sessionAccessCollapseTimer) {
@@ -609,6 +656,7 @@ if (sessionAccessCard) {
   });
 }
 
+// Update auth status text and role-specific card styling.
 function setAuthInfoText() {
   if (!authInfo) {
     return;
@@ -648,12 +696,14 @@ function setAuthInfoText() {
   updateSectionLocks();
 }
 
+// Update inline auth status message.
 function setAuthStatusText(message) {
   if (authStatus) {
     authStatus.textContent = String(message || "");
   }
 }
 
+// Request CSRF token before state-changing API operations.
 async function fetchCsrfToken() {
   const response = await fetch("/api/csrf-token", {
     method: "GET",
@@ -666,6 +716,7 @@ async function fetchCsrfToken() {
   return payload.csrfToken;
 }
 
+// CSRF-protected POST helper with token-expiry handling.
 async function postWithCsrf(path, body, accessToken = "") {
   const csrfToken = await fetchCsrfToken();
   const response = await fetch(path, {
@@ -695,6 +746,7 @@ async function postWithCsrf(path, body, accessToken = "") {
   return payload;
 }
 
+// Validate persisted session token and refresh displayed identity.
 async function validateStoredSession() {
   if (!authState.accessToken) {
     setAuthInfoText();
@@ -732,6 +784,7 @@ async function validateStoredSession() {
   }
 }
 
+// Login form submit wiring.
 if (authForm) {
   authForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -766,6 +819,7 @@ if (authForm) {
   });
 }
 
+// Logout button wiring.
 if (authLogoutBtn) {
   authLogoutBtn.addEventListener("click", async () => {
     if (!authState.accessToken) {
@@ -792,6 +846,7 @@ if (authLogoutBtn) {
   });
 }
 
+// Global click handling for nav shortcuts and collapsible sections.
 document.addEventListener("click", (event) => {
   hideLockHint();
 
@@ -814,6 +869,7 @@ document.addEventListener("click", (event) => {
   }
 });
 
+// Search form submit: filter and rerender all visible data cards.
 document.getElementById("searchForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const query = normalize(document.getElementById("searchInput").value.trim());
@@ -829,6 +885,7 @@ document.getElementById("searchForm").addEventListener("submit", (event) => {
   }
 });
 
+// Initial render and auth/session bootstrapping.
 renderDetections(detectionScenarios);
 renderLibraries(securityFeatures);
 renderOwasp(owaspTop10);
@@ -841,12 +898,14 @@ setInterval(() => {
   }
 }, 30000);
 
+// Re-validate session when tab regains visibility.
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && authState.accessToken) {
     void validateStoredSession();
   }
 });
 
+// Populate architecture text block on page load.
 const architectureDiagramBox = document.getElementById("architectureDiagram");
 if (architectureDiagramBox) {
   architectureDiagramBox.textContent = architectureDiagram;

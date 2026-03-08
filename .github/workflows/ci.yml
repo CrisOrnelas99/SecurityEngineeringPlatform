@@ -26,11 +26,11 @@ jobs:
       - run: npm run test --if-present
       - run: npm audit --audit-level=high || echo "npm audit found issues (non-blocking in CI)."
 
-  python-engine:
+  engine:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: python_engine
+        working-directory: engine
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

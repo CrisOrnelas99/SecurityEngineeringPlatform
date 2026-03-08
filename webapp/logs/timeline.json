@@ -1,1 +1,28 @@
-[]
+[
+  {
+    "timestamp": "2026-03-08T22:58:58.231706+00:00",
+    "event": "HONEYPOT_TRIGGER",
+    "ip": "172.18.0.1",
+    "userId": "anonymous",
+    "scoreImpact": 90,
+    "cumulativeRisk": 90,
+    "actionsTaken": [
+      "BLACKLISTED_IP_ACCESS"
+    ],
+    "details": {
+      "endpoint": "/internal-debug"
+    }
+  },
+  {
+    "timestamp": "2026-03-08T22:58:58.231748+00:00",
+    "event": "AUTO_BLOCK_IP_ACCESS",
+    "ip": "172.18.0.1",
+    "userId": "anonymous",
+    "scoreImpact": 0,
+    "cumulativeRisk": 90,
+    "actionsTaken": [],
+    "details": {
+      "reasonEvent": "HONEYPOT_TRIGGER"
+    }
+  }
+]

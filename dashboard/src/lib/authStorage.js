@@ -1,5 +1,7 @@
+// Session-storage key used to persist dashboard auth state between refreshes.
 export const AUTH_STORAGE_KEY = "tdr_dashboard_auth_state";
 
+// Load auth state from sessionStorage with defensive fallback defaults.
 export function loadStoredAuthState() {
   try {
     const raw = sessionStorage.getItem(AUTH_STORAGE_KEY);
@@ -17,6 +19,7 @@ export function loadStoredAuthState() {
   }
 }
 
+// Persist or clear auth state in sessionStorage based on token presence.
 export function persistAuthState(authState) {
   try {
     if (authState.accessToken || authState.refreshToken) {

@@ -1,8 +1,10 @@
 import { z } from "zod";
 
+// Shared base validators for user credentials and strong password policy.
 const username = z.string().trim().min(4).max(64).regex(/^[A-Za-z0-9_-]+$/);
 const password = z.string().min(12).max(128);
 
+// Request schemas used by auth/admin/payment endpoints.
 export const registerSchema = z.object({ username, password, role: z.enum(["analyst", "admin"]).default("analyst") });
 export const loginSchema = z.object({ username, password });
 export const adminCreateUserSchema = z.object({
@@ -26,6 +28,7 @@ export const paymentSchema = z.object({
   recipient: z.string().trim().min(2).max(64)
 });
 
+// Zod body validation middleware with normalized parsed output.
 export function validateBody(schema) {
   return (req, res, next) => {
     const parsed = schema.safeParse(req.body);

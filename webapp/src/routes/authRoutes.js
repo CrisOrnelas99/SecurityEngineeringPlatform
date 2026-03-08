@@ -24,9 +24,12 @@ import { authenticateToken } from "../middleware/auth.js";
 import { authorize } from "../middleware/rbac.js";
 import { getNewUserInitialPassword, setNewUserInitialPassword } from "../services/settingsStore.js";
 
+// Auth and admin user-management API routes.
 const router = express.Router();
+// Short token fingerprint for logging without storing full secret material.
 const tokenFingerprint = (token) => crypto.createHash("sha256").update(token).digest("hex").slice(0, 16);
 
+// Login throttling to reduce brute-force pressure.
 const loginRateLimiter = rateLimit({
   windowMs: Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 60 * 1000),
   max: Number(process.env.LOGIN_RATE_LIMIT_MAX || 12),
@@ -39,6 +42,7 @@ const loginRateLimiter = rateLimit({
   }
 });
 
+// Refresh throttling to reduce token-abuse bursts.
 const refreshRateLimiter = rateLimit({
   windowMs: Number(process.env.REFRESH_RATE_LIMIT_WINDOW_MS || 60 * 1000),
   max: Number(process.env.REFRESH_RATE_LIMIT_MAX || 30),
@@ -50,6 +54,7 @@ const refreshRateLimiter = rateLimit({
   }
 });
 
+// Issue signed access and refresh tokens for a user identity.
 function createTokens(user) {
   const accessToken = jwt.sign(
     { sub: user.id, username: user.username, role: user.role },
@@ -64,6 +69,7 @@ function createTokens(user) {
   return { accessToken, refreshToken };
 }
 
+// Admin-only user creation using configured initial password.
 router.post("/register", authenticateToken, authorize("admin"), validateBody(adminCreateUserSchema), async (req, res) => {
   const { username, role } = req.body;
   const initialPassword = getNewUserInitialPassword();
@@ -112,6 +118,7 @@ router.post("/register", authenticateToken, authorize("admin"), validateBody(adm
   }
 });
 
+// Admin-only settings read endpoint.
 router.get("/settings", authenticateToken, authorize("admin"), (req, res) => {
   const newUserInitialPassword = getNewUserInitialPassword();
   writeAuditLog({
@@ -123,6 +130,7 @@ router.get("/settings", authenticateToken, authorize("admin"), (req, res) => {
   res.json({ newUserInitialPassword });
 });
 
+// Admin-only update for default new-user initial password.
 router.post("/settings/new-user-password", authenticateToken, authorize("admin"), validateBody(setInitialPasswordSchema), (req, res) => {
   const { newUserInitialPassword } = req.body;
   setNewUserInitialPassword(newUserInitialPassword);
@@ -136,6 +144,7 @@ router.post("/settings/new-user-password", authenticateToken, authorize("admin")
   res.json({ success: true, message: "Default new-user password updated." });
 });
 
+// Authenticate credentials, enforce login protection, then issue tokens.
 router.post("/login", loginRateLimiter, validateBody(loginSchema), async (req, res) => {
   const { username, password } = req.body;
   const protection = getLoginProtectionState(req, username);
@@ -191,6 +200,7 @@ router.post("/login", loginRateLimiter, validateBody(loginSchema), async (req, r
   }
 });
 
+// Rotate refresh token and mint new access token pair.
 router.post("/refresh", refreshRateLimiter, async (req, res) => {
   const refreshToken = req.body?.refreshToken;
   if (!refreshToken || !hasRefreshToken(refreshToken)) {
@@ -240,6 +250,7 @@ router.post("/refresh", refreshRateLimiter, async (req, res) => {
   }
 });
 
+// Return authenticated profile summary.
 router.get("/me", authenticateToken, (req, res) => {
   const user = findUserById(req.user.sub);
   if (!user) {
@@ -256,6 +267,7 @@ router.get("/me", authenticateToken, (req, res) => {
   });
 });
 
+// Authenticated self-service password change flow.
 router.post("/change-password", authenticateToken, validateBody(changePasswordSchema), async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const user = findUserById(req.user.sub);
@@ -292,6 +304,7 @@ router.post("/change-password", authenticateToken, validateBody(changePasswordSc
   }
 });
 
+// Admin-only list users endpoint.
 router.get("/users", authenticateToken, authorize("admin"), (req, res) => {
   const locked = getLockedUsers();
   const users = getUsers().map((user) => ({
@@ -311,6 +324,7 @@ router.get("/users", authenticateToken, authorize("admin"), (req, res) => {
   res.json(users);
 });
 
+// Admin-only reset-password endpoint for a target user.
 router.post("/users/:id/reset-password", authenticateToken, authorize("admin"), async (req, res) => {
   const userId = String(req.params.id || "");
   const target = findUserById(userId);
@@ -345,6 +359,7 @@ router.post("/users/:id/reset-password", authenticateToken, authorize("admin"), 
   }
 });
 
+// Admin-only delete user endpoint (cannot delete current session user).
 router.delete("/users/:id", authenticateToken, authorize("admin"), (req, res) => {
   const userId = String(req.params.id || "");
   if (userId === req.user?.sub) {
@@ -375,6 +390,7 @@ router.delete("/users/:id", authenticateToken, authorize("admin"), (req, res) =>
   res.json({ success: true, deletedUserId: userId });
 });
 
+// Logout revokes provided refresh token and ends session on client side.
 router.post("/logout", (req, res) => {
   const refreshToken = req.body?.refreshToken;
   if (refreshToken) {

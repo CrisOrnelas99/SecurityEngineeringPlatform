@@ -8,8 +8,8 @@ services:
 
   webapp:
     build:
-      context: ./webapp
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./webapp/Dockerfile
     image: security-webapp:latest
     depends_on:
       - security-core
@@ -36,7 +36,6 @@ services:
       - ./webapp/logs:/app/logs
       - ./webapp/data:/app/data
       - ./webapp/uploads:/app/uploads
-      - ./security_core:/app/security_core:ro
 
   waf-proxy:
     image: owasp/modsecurity-crs:nginx
@@ -68,15 +67,15 @@ services:
       - ANOMALY_INBOUND=5
       - ANOMALY_OUTBOUND=4
     ports:
-      - "${WAF_DASHBOARD_PORT:-8081}:8080"
+      - "127.0.0.1:${WAF_DASHBOARD_PORT:-8081}:8080"
     volumes:
       - ./waf/modsecurity-override.conf:/etc/nginx/templates/modsecurity.d/modsecurity-override.conf.template:ro
 
-  python-engine:
+  engine:
     build:
-      context: ./python_engine
+      context: ./engine
       dockerfile: Dockerfile
-    image: security-python-engine:latest
+    image: security-engine:latest
     depends_on:
       - webapp
     environment:
@@ -89,15 +88,15 @@ services:
       - SECURITY_CORE_BIN=/opt/security_core/build/security_core
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-change-this-access-secret}
       - TDR_ALLOWED_ROLES=admin,analyst
-      - TDR_LOAD_PERSISTED_STATE=false
+      - TDR_LOAD_PERSISTED_STATE=true
       - TDR_REPLAY_LOG_ON_START=false
       - TDR_AUTO_BLOCK_PRIVATE_IPS=false
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./webapp/logs:/data
       - ./webapp/data:/shared
-      - ./python_engine/data:/app/data
+      - ./engine/data:/app/data
       - ./security_core:/opt/security_core:ro
 
   dashboard:
@@ -106,7 +105,7 @@ services:
       dockerfile: Dockerfile
     image: security-dashboard:latest
     depends_on:
-      - python-engine
+      - engine
       - waf-proxy
     environment:
       - VITE_TDR_API_URL=http://localhost:8000

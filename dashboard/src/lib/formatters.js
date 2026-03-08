@@ -1,3 +1,4 @@
+// Convert ISO timestamp into browser-local display string.
 export function formatEventTime(isoTs) {
   const dt = new Date(isoTs);
   if (Number.isNaN(dt.getTime())) {
@@ -6,6 +7,7 @@ export function formatEventTime(isoTs) {
   return dt.toLocaleString();
 }
 
+// Normalize IP display and label IPv4/IPv6 consistently for UI rendering.
 export function getIpDisplayInfo(rawIp) {
   const ip = String(rawIp || "");
   if (ip.startsWith("::ffff:")) {
@@ -17,6 +19,7 @@ export function getIpDisplayInfo(rawIp) {
   return { version: "IPv4", value: ip };
 }
 
+// Map internal event names into dashboard-friendly labels.
 export function normalizeEventName(name) {
   if (name === "BRUTE_FORCE") {
     return "FAILED_LOGIN_BURST";
@@ -42,6 +45,7 @@ export function normalizeEventName(name) {
   return name;
 }
 
+// Map internal action names into dashboard-friendly labels.
 export function normalizeActionName(name) {
   if (name === "BLACKLISTED_IP_ACCESS") {
     return "AUTO_BLOCK_IP_ACCESS";
@@ -52,6 +56,7 @@ export function normalizeActionName(name) {
   return name;
 }
 
+// Format details object values for readable alert/timeline detail rows.
 export function formatDetailValue(key, value) {
   if (value === null || value === undefined) {
     return "n/a";

@@ -12,10 +12,6 @@ find_package(nlohmann_json REQUIRED)
 
 add_executable(security_core
   main.cpp
-  crypto_engine.cpp
-  token_service.cpp
-  file_crypto.cpp
-  utils.cpp
 )
 
 target_include_directories(security_core PRIVATE ${SODIUM_INCLUDE_DIRS})

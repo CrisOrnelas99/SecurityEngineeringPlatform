@@ -1,59 +1,13 @@
+// Runs the C++ crypto helper as a child process.
 import { spawn } from "node:child_process";
-import crypto from "node:crypto";
 
+// Path to crypto core binary injected by environment.
 const coreBinary = process.env.SECURITY_CORE_BIN || "security_core";
 
-function hashPasswordFallback(password) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const derived = crypto.scryptSync(password, salt, 64).toString("hex");
-  return { hash: `scrypt$${salt}$${derived}` };
-}
-
-function verifyPasswordFallback(password, hash) {
-  if (typeof hash !== "string") {
-    return { valid: false };
-  }
-
-  const parts = hash.split("$");
-  if (parts.length !== 3 || parts[0] !== "scrypt") {
-    return { valid: false };
-  }
-
-  const [, salt, expectedHex] = parts;
-  const derived = crypto.scryptSync(password, salt, 64).toString("hex");
-  const expected = Buffer.from(expectedHex, "hex");
-  const actual = Buffer.from(derived, "hex");
-  if (expected.length !== actual.length) {
-    return { valid: false };
-  }
-  return { valid: crypto.timingSafeEqual(expected, actual) };
-}
-
-function maybeFallback(error, operation, payload) {
-  const message = String(error?.message || "");
-  const isUnavailable =
-    message.includes("Crypto core unavailable") ||
-    message.includes("ENOENT") ||
-    message.includes("not found");
-  if (!isUnavailable) {
-    throw error;
-  }
-
-  if (operation === "hash-password" && typeof payload?.password === "string") {
-    return hashPasswordFallback(payload.password);
-  }
-  if (operation === "verify-password" && typeof payload?.password === "string") {
-    return verifyPasswordFallback(payload.password, payload?.hash);
-  }
-
-  throw error;
-}
-
+// Public helper used by routes/services to call crypto-core operations.
+// Sends JSON to stdin and expects JSON on stdout.
 export function callCryptoCore(operation, payload) {
-  if (operation === "verify-password" && typeof payload?.hash === "string" && payload.hash.startsWith("scrypt$")) {
-    return Promise.resolve(verifyPasswordFallback(String(payload?.password || ""), payload.hash));
-  }
-
+  // Execute the C++ binary operation and parse returned JSON.
   return new Promise((resolve, reject) => {
     const child = spawn(coreBinary, [operation], { stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
@@ -68,20 +22,12 @@ export function callCryptoCore(operation, payload) {
     });
 
     child.on("error", (error) => {
-      try {
-        resolve(maybeFallback(new Error(`Crypto core unavailable: ${error.message}`), operation, payload));
-      } catch (fallbackError) {
-        reject(fallbackError);
-      }
+      reject(new Error(`Crypto core unavailable: ${error.message}`));
     });
 
     child.on("close", (code) => {
       if (code !== 0) {
-        try {
-          resolve(maybeFallback(new Error(`Crypto core returned ${code}: ${stderr}`), operation, payload));
-        } catch (fallbackError) {
-          reject(fallbackError);
-        }
+        reject(new Error(`Crypto core returned ${code}: ${stderr}`));
         return;
       }
 

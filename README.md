@@ -2,25 +2,28 @@
 
 Hands-on Threat Detection & Response + protected web app lab for practical cybersecurity engineering.
 
-## Latest Updates (2026-03-07)
+## Latest Updates (2026-03-08)
 - Protected app (`:8080`) section label renamed to **Cybersecurity Lab**.
 - Detection guidance in the protected app now uses `:8080` as the trigger path for manual testing.
 - Added dashboard honeypot test route: `http://localhost:8081/internal-debug-dashboard`.
   - Visiting this route triggers a backend honeypot event (`/internal-debug`) so `HONEYPOT_TRIGGER` appears in timeline/alerts.
 - Security Features and Libraries list was reviewed against implemented code and cleaned to remove redundant/non-relevant entries.
+- Crypto path is now C++-only in `webapp` (`security_core`): JS `scrypt` fallback was removed.
+- Engine persistence now defaults to enabled (`TDR_LOAD_PERSISTED_STATE=true`), so alerts/timeline survive container restarts.
 
 ## Stack
-- `webapp` (Node.js/Express)
-- `waf-proxy` (Nginx + ModSecurity + OWASP CRS)
-- `python_engine` (FastAPI + detection/correlation engine)
-- `dashboard` (React TD&RD UI)
-- `security_core` (C++ crypto helper binary)
+- `webapp` (Node.js/Express) - the real protected app backend (internal `:3000`)
+- `waf-proxy` (Nginx + ModSecurity + OWASP CRS) - WAF in front of `webapp`; public entry is `:8080`
+- `dashboard` (React TD&RD UI) - analyst/admin UI app (internal `:5173`)
+- `waf-dashboard` (Nginx + ModSecurity + OWASP CRS) - WAF in front of `dashboard`; public entry is `:8081`
+- `engine` (FastAPI + detection/correlation engine) - watches app logs, detects attack patterns, scores risk, and triggers response actions
+- `security_core` (C++) - crypto helper binary (password/token utilities)
 
 ## Why Docker In This Project
 - Runs all services with consistent versions and networking on any machine.
 - Prevents local dependency/version drift across Node, Python, and C++ tooling.
 - Brings the full lab up with one command (`docker compose up -d --build`).
-- Keeps service boundaries clear (`waf -> webapp`, `dashboard -> python_engine/webapp`).
+- Keeps service boundaries clear (`waf -> webapp`, `dashboard -> engine/webapp`).
 - Makes demo/review easier: reviewers run the same stack and get the same behavior.
 
 ## Full Architecture
@@ -29,7 +32,8 @@ Hands-on Threat Detection & Response + protected web app lab for practical cyber
 Browser
   |\
   | \__ Dashboard UI (:8081) [waf-dashboard]
-  |      |- reads detections/risk/timeline from python_engine (:8000)
+  |      \-> forwards to internal dashboard app (:5173)
+  |      |- reads detections/risk/timeline from engine (:8000)
   |      \- performs app auth/admin actions via WAF (:8080)
   |
   \__ Protected App Entry (:8080) [waf-proxy]
@@ -38,11 +42,17 @@ Browser
          \-> forwards to webapp internal (:3000)
 
 webapp (:3000)
-  |- auth, RBAC, CSRF, rate limit, honeypot routes
+  |- backend behind :8080 WAF
+  |- auth, RBAC, CSRF, input validation, rate limit, honeypot routes
   |- writes structured audit logs -> webapp/logs/app.log
   \- persists app data -> webapp/data/* (SQLite + JSON)
 
-python_engine (:8000)
+dashboard (:5173)
+  |- frontend app behind :8081 WAF
+  |- analyst/admin UI for alerts, timeline, risk, and response actions
+  \- calls engine APIs and webapp auth/admin endpoints
+
+engine (:8000)
   |- tails app.log
   |- correlates detections + scores risk
   |- auto-response (block/test IP handling)
@@ -55,11 +65,11 @@ security_core
 ## Security Architecture (Practical View)
 - **Edge protection (WAF):** `waf-proxy` inspects inbound requests before they reach the app.
 - **Application layer (webapp):** serves app/auth routes and emits security telemetry.
-- **Detection and response (python_engine):** correlates detections, calculates risk, and tracks response actions.
+- **Detection and response (engine):** correlates detections, calculates risk, and tracks response actions.
 - **Analyst visibility/control (dashboard):** reads alerts/risk/timeline and allows admin operations.
 
 ### Event/Data Flow
-`Client request -> WAF -> Webapp middleware/endpoint -> app log event -> python_engine correlation -> dashboard telemetry`
+`Client request -> WAF -> Webapp middleware/endpoint -> app log event -> engine correlation -> dashboard telemetry`
 
 ## Cybersecurity Lab Guide
 - The protected app lab is intentionally manual-test focused.
@@ -128,7 +138,7 @@ security_core
 ## Data Persistence (Where Things Are Stored)
 - Web app logs: `webapp/logs/app.log`
 - Web app data/artifacts: `webapp/data/*` (SQLite + JSON)
-- Engine artifacts (alerts/timeline/block/test lists): persisted by `python_engine` under its mounted data/log paths.
+- Engine artifacts (alerts/timeline/block/test lists): persisted by `engine` under its mounted data/log paths.
 - Dashboard is a UI client; it does not act as the source of truth for detections.
 
 ## Run
@@ -274,7 +284,7 @@ for i in $(seq 1 50); do curl -s "http://localhost:8080/api/health" >/dev/null; 
 ```text
 .
 |- dashboard/
-|- python_engine/
+|- engine/
 |- security_core/
 |- webapp/
 |- waf/

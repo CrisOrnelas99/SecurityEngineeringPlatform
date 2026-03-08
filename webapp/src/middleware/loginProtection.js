@@ -1,20 +1,24 @@
 import { isTestIp } from "./threatControls.js";
 
+// In-memory counters for login failure tracking and temporary lock windows.
 const ipFailures = new Map();
 const userFailures = new Map();
 const ipLockUntil = new Map();
 const userLockUntil = new Map();
 
+// Backoff policy knobs (window, max failures, and exponential lock duration).
 const WINDOW_MS = Number(process.env.LOGIN_FAILURE_WINDOW_MS || 10 * 60 * 1000);
 const MAX_FAILURES = Number(process.env.LOGIN_MAX_FAILURES || 5);
 const BASE_LOCK_MS = Number(process.env.LOGIN_BASE_LOCK_MS || 30 * 1000);
 const MAX_LOCK_MS = Number(process.env.LOGIN_MAX_LOCK_MS || 15 * 60 * 1000);
 
+// Normalize IPv6-mapped IPv4 addresses into standard IPv4 form.
 function normalizeIp(ip) {
   const value = String(ip || "");
   return value.startsWith("::ffff:") ? value.slice(7) : value;
 }
 
+// Add a failed-attempt timestamp and keep only entries within active window.
 function pushFailure(map, key, now) {
   const entries = map.get(key) || [];
   entries.push(now);
@@ -23,10 +27,12 @@ function pushFailure(map, key, now) {
   return active.length;
 }
 
+// Clear failure history for a specific map key.
 function clearFailures(map, key) {
   map.delete(key);
 }
 
+// Set lock expiration with exponential backoff once threshold is crossed.
 function setLock(lockMap, key, count, now) {
   if (count < MAX_FAILURES) {
     return 0;
@@ -37,6 +43,7 @@ function setLock(lockMap, key, count, now) {
   return lockMs;
 }
 
+// Return remaining lock duration in ms; clear expired locks.
 function getRetryAfterMs(lockMap, key, now) {
   const until = lockMap.get(key) || 0;
   const remaining = until - now;
@@ -47,6 +54,7 @@ function getRetryAfterMs(lockMap, key, now) {
   return remaining;
 }
 
+// Read current lock state before attempting login.
 export function getLoginProtectionState(req, usernameRaw = "") {
   const now = Date.now();
   const ip = normalizeIp(req.ip);
@@ -60,6 +68,7 @@ export function getLoginProtectionState(req, usernameRaw = "") {
   return { ip, username, retryAfterMs, isTestIp: false };
 }
 
+// Record one failed login attempt and update lock windows.
 export function recordLoginFailure(req, usernameRaw = "") {
   const now = Date.now();
   const ip = normalizeIp(req.ip);
@@ -91,6 +100,7 @@ export function recordLoginFailure(req, usernameRaw = "") {
   };
 }
 
+// Clear lock/failure state after successful authentication.
 export function clearLoginProtection(req, usernameRaw = "") {
   const ip = normalizeIp(req.ip);
   const username = String(usernameRaw || "").trim().toLowerCase();
